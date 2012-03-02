@@ -1,0 +1,2043 @@
+\documentclass{book}
+\usepackage{syntonly}
+\syntaxonly
+\usepackage{CJK}
+\setlength{\parindent}{2em}
+\setlength{\parskip}{1em}
+\linespread{1.2}
+\usepackage[margin = 2.5cm]{geometry}
+\usepackage[CJKbookmarks=true]{hyperref}
+\begin{document}
+\begin{CJK*}{UTF8}{gbsn}
+\tableofcontents{}
+\chapter{导论}
+Sawfish是一个用于X11的可用lisp进行扩展的窗口管理器。它的目标是使窗口管理的所有领域都尽可能地可以被定制，但是仍然保持甚至比现有的窗口管理器更快。
+
+抛开可扩展性不说，它的策略和大多数的窗口管理器相比是最小的。它没有实现桌面背景、应用程序停泊坞，或者其它可以通过独立应用程序做到的功能。
+
+为了未来的可扩展性和重定义的考虑，所有高级的窗口管理函数都使用Lisp实现。同时，和Emacs类似，大多数收到的事件都通过键绑定和挂钩输出到Lisp环境中。这些事件包括光标行为和很多内置的X11事件。
+
+Sawfish使用librep这个Lisp环境，这个运行库实现了一个和Emacs Lisp相似的语言，但有着更多的扩展，并且使用了词法作用域来取代动态作用域。这份手册假定读者至少有关于这个语言的基本知识。
+
+主页和邮件列表可以在FAQ中找到。
+\chapter{颜色}
+Sawfish提供了一个表示颜色的原始的类型。每一个颜色对象允许一个单一的颜色值被命名和在Lisp函数间传递。
+\begin{description}
+\item[-{}-] 函数：\verb|colorp arg|\\
+当ARG是颜色类型的一种时返回`t'。
+\item[-{}-] 函数：\verb|get-color name #!optional alpha|\\
+返回表示由字符串NAME所指定的颜色的颜色对象。依据来自标准X11的颜色修饰符，或者是`rgb.txt'数据库中的命名的颜色，或者是一个定义颜色中的了红、绿和蓝三种成份的字符串，或者十六进制中的八位或十六位，也就是`\#RRGGBB'或者`\#RRRRGGGGBBBB'。
+
+可选的参数ALPHA将成为所返回颜色的$\alpha $通道值。它被传递到`\verb|get-color-rgb|'。
+
+如果没有已知的颜色名为NAME，那么将抛出一个错误。
+\item[-{}-] 函数：\verb|get-color-rgb red green blue #!optional alpha|\\
+返回表示由指定的RGB成份构成的颜色对象（每一个成份的范围为0到65535）。
+
+可选的参数ALPHA将成为所返回颜色的$\alpha $通道值。使用从0到65535之间的一个整数。不支持超出范围的整数，而非整数如`nil'将被悄悄地转换为65535（完全不能理解）。
+\end{description}
+
+给出一个颜色对象，既可以找到定义颜色的实际的三原色值，也可以找到X11所使用的引用到这个颜色的其中一个名字。
+\begin{description}
+\item[-{}-] 函数：\verb|color-rgb color|\\
+返回表示对象COLO这个颜色的实际值，是一个形如`(RED GREEN BLUE ALPHA)'的整数列表。每一个单独的值的范围为0到65535。
+\item[-{}-] 函数：\verb|color-rgb-8 color|\\
+就像`color-rgb'一样，返回一个形如`(RED GREEN BLUE ALPHA)'的整数列表。但是，颜色值被按比例缩放以适应从0到255的范围。
+\item[-{}-] 函数：\verb|color-name color|\\
+返回由颜色对象COLOR所表示的颜色的名字。注意返回的名字是从这个颜色的有效的名字的集合中挑选的；它可能和这个颜色一开始分配时使用的名字有所不同。
+
+X11所使用的名字并不包含$\alpha $通道的信息。
+\end{description}
+
+在一个颜色对象被用于定义一块文本的前景色时，`default-foreground'这个颜色提供了在没有指定具体颜色时所使用的默认值。
+\begin{description}
+\item[-{}-] 变量：\verb|default-foreground|\\
+在没有定义其它颜色的时候为文本使用的颜色。
+\end{description}
+\chapter{字型}
+Lisp字型对象允许处理对应的X11的字型。
+\begin{description}
+\item[-{}-] 函数：\verb|fontp arg|\\
+当ARG是一个字型对象时返回`t'。
+\end{description}
+
+Sawfish支持三种``类型''的字型：X11旧核心的字型（字型集和字型结构），Xft字型，以及如果有的话，还支持Pango字型。在lisp中，类型是由字符串表示的，`\verb|"|xlfd\verb|"|'、`\verb|"|Xft\verb|"|'或者`\verb|"|Pango\verb|"|'。
+\begin{description}
+\item[-{}-] 函数：\verb|font-type-exists-p type|\\
+当TYPE是有效的字型时返回真，否则返回假。
+\item[-{}-] 函数：\verb|get-font-typed type name|\\
+返回一个表示X11字型的字型对象。它将由字符串NAME和TYPE指定。如果指定的字型没有效，将抛出一个错误。
+
+\verb|"|安全的\verb|"|例子有：
+\begin{verbatim}
+(get-font-typed "xlfd" "fixed")
+(get-font-typed "Xft" "Sans")
+(get-font-typed "Pango" "Sans")
+\end{verbatim}
+\item[-{}-] 函数：\verb|get-font name|\\
+返回一个表示由字符串NAME所指定的X11核心字型（字型集和字型结构）的字型对象。
+
+如果在X11核心字型中没有名为NAME的可用的字型，将抛出一个错误。
+\end{description}
+
+许多函数允许查看和字型对象关联的属性。
+\begin{description}
+\item[-{}-] 函数：\verb|font-name font|\\
+以字符串的形式返回表示对象FONT的X11字型的名字。
+\item[-{}-] 函数：\verb|font-type font|\\
+返回字型font的类型。返回值将是`\verb|"|xlfd\verb|"|'、`\verb|"|Xft\verb|"|'和`\verb|"|Pango\verb|"|'之一。
+\item[-{}-] 函数：\verb|font-height font|\\
+返回由FONT对象所表示的字型中字形的高度范围。
+\item[-{}-] 函数：\verb|font-ascent #!optional font|\\
+返回使用由FONT表示的字型所渲染的字形的祖先。如果没有给出字型参数，将使用默认字型。
+\item[-{}-] 函数：\verb|font-descent #!optional font|\\
+返回使用由FONT表示的字型所渲染的字型的后代。如果没有给出字型参数，将使用默认字型。
+\item[-{}-] 函数：\verb|text-width string #!optional font|\\
+返回在使用FONT（如果FONT没有定义，使用变量`default-font'的值）字型对象时，为了显示文本STRING所必需的水平方向的像素数。
+\end{description}
+
+与颜色一样，在没有指定其它字型的场合，会指派一个默认的字型。
+\begin{description}
+\item[-{}-] 变量：\verb|default-font|\\
+没有指定其它字型时使用的字型对象。
+\end{description}
+
+字型可以有和它们相关的Lisp属性（类似于和符号相关的属性列表）。现阶段这并没有被窗口管理器使用。
+\begin{description}
+\item[-{}-] 函数：\verb|font-put font property value|\\
+将lisp对象VALUE和字型对象FONT的命名属性PROPERTY关联起来。
+\item[-{}-] 函数：\verb|font-get font property|\\
+返回在字型FONT中由符号PROPERTY所指定的属性的值，如果没有这个属性就返回`nil'。
+\item[-{}-] 变量：\verb|fonts-are-fontsets|\\
+如果正在使用的X字型是字型集就返回真。如果`setlocale'失败，或者返回了一个ASCII区域，又或者X不支持这个区域设置，那么函数将返回假。
+\end{description}
+\chapter{图像}
+图像类型允许窗口管理器处理任何24位颜色深度的图像。图像既从文件读取，也被动态渲染。
+\begin{description}
+\item[-{}-] 函数：\verb|imagep arg|\\
+当ARG是一种图像类型时返回`t'。
+\item[-{}-] \verb|make-image file-name #!optional plist|\\
+创建并返回一个包含由名为FILE-NAME（一个字符串）的文件的内容生成的图像的图像对象。当试图寻找一个包含名为FILE-NAME的文件的目录时，`image-load-path'目录提供了搜索路径。
+
+所有通用的图像格式都很可能被读取。但PNG、JPEG和XPM应该总是被支持的。
+
+参数PLIST将变成所返回的图像的属性列表。
+
+如果文件FILE-NAME没有找到，或者没有从文件中构造出一幅图像，将抛出一个错误。
+\item[-{}-] 变量：\verb|image-directory|\\
+包含内置Sawfish图像的目录。缺省情况下，这是指`SAWFISH-DIRECTORY/image'。
+\item[-{}-] 变量：\verb|image-load-path|\\
+目录名的列表。它定义了在加载图像时的搜索路径。缺省情况下，值为`(\verb|"|.\verb|"| IMAGE-DIRECTORY)'。改变IMAGE-DIRECTORY并不会改变IMAGE-LOAD-PATH。
+\item[-{}-] 函数：\verb|make-sized-image width height #!optional color|\\
+创建并返回一幅新图像，宽为WIDTH，高为HEIGHT。如果COLOR有定义，那么它将指定图像中所有像素的颜色。如果没有，所有像素都是黑色。
+\item[-{}-] 函数：\verb|make-image-from-x-drawable id #!optional mask-id|\\
+创建并返回一幅图像。这幅图像通过在Sawfish图像对象中复制进一个X轴拉伸操作来构造。该函数自动控制深度转换。
+
+如果指定了MASK-ID，它将识别另一个X轴的拉伸操作。在这个拉伸中的黑色像素意味着在图像对象中的透明像素（不是黑色的像素对图像对象没有影响）。
+\item[-{}-] 函数：\verb|copy-image image|\\
+返回一个新分配的图像对象，这是对图像对象IMAGE的精确复制。
+\item[-{}-] 函数：\verb|image-dimensions image|\\
+返回一个定义了表示IMAGE的图像的尺寸的点对`(WIDTH . HEIGHT)'。
+\item[-{}-] 函数：\verb|flip-image-horizontally image|\\
+以垂直轴为对称轴翻转IMAGE的内容。这是一个破坏性的操作，将返回一个修改过的参数。
+\item[-{}-] 函数：\verb|flip-image-vertically image|\\
+以水平轴为对称轴翻转IMAGE的内容。这是一个破坏性的操作，将返回一个修改过的参数。
+\item[-{}-] 函数：\verb|flip-diagonally image|\\
+以从左上角到右下角的对角线为对称轴翻转IMAGE的内容。这是一个破坏性的操作，将返回一个修改过的参数。
+\end{description}
+
+和很多其它类型一样，图像对象可以关联任意的状态。
+\begin{description}
+\item[-{}-] 函数：\verb|image-put image property value|\\
+设置IMAGE中名为PROPERTY（一个符号）的属性为VALUE。
+\item[-{}-] 函数：\verb|image-get image property|\\
+返回IMAGE中名为PROPERTY的属性的值，如果没有这个属性就返回`nil'。
+\end{description}
+
+唯一一个预定义的属性是符号`tiled'，在图像被用于窗口装饰时使用。当值不为nil时图像将不会被拉伸为装饰的大小，而是平铺到装饰上。
+
+当图像被拉伸以穿过装饰的边框时，实际被拉伸的像素由图像的``边框''来决定。边框定义了左边像素的外接矩形，而内接矩形被拉伸。
+\begin{description}
+\item[-{}-] 函数：\verb|image-border image|\\
+返回一个表示图像对象IMAGE的边框的整数列表`(LEFT RIGHT TOP BOTTOM)'。
+
+和图像的每一个边框关联的数字定义了不会被拉伸的相邻边缘的像素数目。
+\item[-{}-] 函数：\verb|set-image-border image left right top bottom|\\
+设置IMAGE的边框。
+
+和图像的每一个边框关联的数字定义了不会被拉伸的相邻边缘的像素数目。
+\end{description}
+
+图像的形状也可以被指定，这会定义哪些像素将被透明处理。每一幅图像都定义了单独一个颜色来标记透明像素。
+
+图像形状不被GDK Pixbuf所支持。如果函数在不被支持的情况下被调用，Sawfish将向`STDERR'打印诊断信息。
+\begin{description}
+\item[-{}-] 函数：\verb|image-shape-color image|\\
+返回在IMAGE中标记透明像素的颜色，如果没有指定颜色就返回`nil'。
+\item[-{}-] 函数：\verb|set-image-shape-color image color|\\
+将IMAGE中标记透明像素的颜色指定为COLOR。
+\end{description}
+
+也可以为每一幅图像定义``颜色修改器''。这将定义在显示时应用到每一个像素上的值的变换。每一个图像都有四个不同的修改器，每一个颜色成份都对应一个，还有一个对应于整个图像。
+\begin{description}
+\item[-{}-] 函数：\verb|image-modifier image type|\\
+返回一个由IMAGE中的符号TYPE定义的修改器，这是一个行如`(GAMMA BRIGHTNESS CONTRAST)'的列表。每一个整数都有一个从0到255之间的值，表示在渲染图像时应用到对应属性上的权重。
+
+四种类型是`red'、`green'、`blue'和`nil'（所有颜色）。参数必须和这些符号中的一个属于`eq'的相等级别。
+\item[-{}-] 函数：\verb|set-image-modifier image type gamma brightness contrast|\\
+通过TYPE来设置IMAGE的图像修改器。TYPE应该为`red'、`green'或者`blue'（而不是符号）中的一个值。
+\end{description}
+
+还有其它许多处理图像的函数：
+\begin{description}
+\item[-{}-] 函数：\verb|bevel-image image border upwards #!optional bevel-percent|\\
+变换IMAGE中最边缘的像素使其产生``倾斜''效果。BORDER是一个定义倾斜的宽度的整数。如果UPWARDS不是nil那么倾斜角将升高，否则将被降低。
+
+如果定义了BEVEL-PERCENT，那么它指定了所绘制的截成斜角的高度和深度。如果没有定义，那么参数的值将取自于`default-bevel-percent'这个变量。
+\item[-{}-] 变量：\verb|default-bevel-percent|\\
+绘制的截成斜角的默认高度，以百分数表示。正常情况下为$50\%$。
+\item[-{}-] 函数：\verb|clear-image image #!optional color|\\
+设置所有在IMAGE中的像素为COLOR（如果COLOR没有定义就是黑色）颜色。
+\item[-{}-] 函数：\verb|tile-image dest-image source-image|\\
+从左上角开始将SOURCE-IMAGE平铺在DEST-IMAGE上，在外表上起作用。
+\item[-{}-] 函数：\verb|scale-image image width height|\\
+返回一张拉伸为WIDTH乘以HEIGHT像素的IMAGE的拷贝。
+\item[-{}-] 函数：\verb|composite-images image1 image2 #!optional x y|\\
+复制IMAGE2的内容到IMAGE1中。IMAGE2被裁剪以适应IMAGE1。参数X和Y指示IMAGE2的左上角在IMAGE1中的位置。如果没有提供，它们默认为0。
+\item[-{}-] 函数：\verb|crop-image image x y width height|\\
+返回一幅新图像，它是IMAGE的一个矩形区域。结果图像从IMAGE的像素(X，Y)处开始截取，且伸展为像素为WIDTH和HEIGHT的区域。
+
+当裁剪的区域扩展到超过IMAGE的边界时，函数的行为是未定义的。
+\end{description}
+
+下列函数允许用户在一个像素的等级上处理图像。它们都使用一个表示像素的列表：(R，G，B，A)表示红、绿、蓝和$\alpha $通道成份。
+\begin{description}
+\item[-{}-] 函数：\verb|image-ref image x y|\\
+返回在IMAGE的(X，Y)处的像素的红、绿、蓝和$\alpha $通道值的列表(R，G，B，A)。
+
+当像素的位置超出图像的边界时，函数的行为是未定义的。
+\item[-{}-] 函数：\verb|image-set image x y pixel|\\
+将在IMAGE中(X，Y)位置的像素设置为PIXEL。PIXEL是一个数字列表(R，G，B，A)，即红、绿、蓝和$\alpha $通道值。
+\item[-{}-] 函数：\verb|image-map xform image|\\
+对IMAGE中的每一个像素调用XFORM并用计算结果替换原来的像素。
+
+XFORM接受一个四元素的列表(R，G，B，A)作为参数，表示一个像素的红、绿、蓝和$\alpha $通道值。XFORM应当返回一个给定像素的新的值。返回的形式是同样的四元素列表。
+
+XFORM也可以返回`nil'。在这种情况下，`image-map'立即返回一个无效的对象。
+\item[-{}-] 函数：\verb|image-fill generator image|\\
+将IMAGE中的每一个像素设置为调用GENERATOR的结果。
+
+GENERATOR接受两个参数：一个像素的X和Y坐标。返回一个表示红、绿、蓝和$\alpha $通道值的四元素列表(R，G，B，A)。这个新的像素替换了当前像素在(X，Y)处的内容。
+
+GENERATOR允许返回`nil'。在这种情况下，`image-map'立即返回一个无效的对象。
+\item[-{}-] 函数：\verb|pixmap-cache-control max|\\
+告诉Sawfish缓存最多MAX个像素。返回一个表示当前缓存状态的四元素列表：`(MAX-CACHED-PIXELS， CACHED-PIXELS， HITS， MISSES)'。
+\end{description}
+\chapter{光标}
+光标定义了鼠标指针的图像的形状和热点。Sawfish提供了一个用于处理这些对象的lisp类型。对于和指针有关的函数，参见指针函数。
+\begin{description}
+\item[-{}-] 函数：\verb|cursorp arg|\\
+当ARG是一种光标类型时返回`t'。
+\item[-{}-] 函数：\verb|get-cursor data|\\
+返回表示由DATA所定义的光标的光标对象。如果DATA是一个符号，将使用它的`cursor-shape'属性代替。
+
+可以使用的DATA的值是一个表示标准X11光标字型中的一个字形的整数，或者一个四元素的向量。
+
+向量的格式是`[IMAGE MASK FG BG]'，其中IMAGE和MASKA是标准X11的位图文件名，而FG和BG是颜色（或者颜色的名字）。所有位图文件通过变量`image-load-path'查找。
+\item[-{}-] 函数：\verb|recolor-cursor cursor fg bg|\\
+将光标对象CURSOR的颜色变为FG和BG（不管是颜色对象还是颜色名）。
+\item[-{}-] 函数：\verb|default-cursor #!optional cursor|\\
+设置显示在根窗口的光标对象，以及其它没有指定光标的窗口框架的光标为CURSOR。
+
+如果不带参数地调用，函数就仅仅返回当前光标对象。
+\end{description}
+
+因此没有必要记忆用于索引X11光标字型中的字形的整数，下列符号的`cursor-shape'属性都会被自动设置：
+\begin{verbatim}
+`X_cursor', `arrow', `based_arrow_down', `based_arrow_up', `boat',
+`bogosity', `bottom_left_corner', `bottom_right_corner', `bottom_side',
+`bottom_tee', `box_spiral', `center_ptr', `circle', `clock',
+`coffee_mug', `cross', `cross_reverse', `crosshair', `diamond_cross',
+`dot', `dotbox', `double_arrow', `draft_large', `draft_small',
+`draped_box', `exchange', `fleur', `gobbler', `gumby', `hand1',
+`hand2', `heart', `icon', `iron_cross', `left_ptr', `left_side',
+`left_tee', `leftbutton', `ll_angle', `lr_angle', `man',
+`middlebutton', `mouse', `pencil', `pirate', `plus', `question_arrow',
+`right_ptr', `right_side', `right_tee', `rightbutton', `rtl_logo',
+`sailboat', `sb_down_arrow', `sb_h_double_arrow', `sb_left_arrow',
+`sb_right_arrow', `sb_up_arrow', `sb_v_double_arrow', `shuttle',
+`sizing', `spider', `spraycan', `star', `target', `tcross',
+`top_left_arrow', `top_left_corner', `top_right_corner', `top_side',
+`top_tee', `trek', `ul_angle', `umbrella', `ur_angle', `watch', `xterm'.
+\end{verbatim}
+
+和这些名字关联的字形在第二卷`Xlib参考手册'的附录\uppercase\expandafter{\romannumeral1}中。
+\chapter{窗口}
+sawfish中最重要的数据类型之一是窗口类型。所有可管理的客户端窗口都有一个单一关联的窗口对象。
+\begin{description}
+\item[-{}-] 函数：\verb|windowp arg|\\
+当ARG是一种窗口类型并且关联到一个客户端窗口上时返回`t'。
+\end{description}
+
+因为根窗口不是一个可管理的客户端窗口，因此它不是由一个窗口对象表示的。有时候函数的参数和返回值会将符号`root'作为根窗口对待。窗口挂钩也是一样的。但有时候不是这样的。
+\section{窗口属性}
+很多特征在相关的章节中描述。
+
+首先，基本特征，例如名字、类、ID等。
+\begin{description}
+\item[-{}-] 函数：\verb|window-name window|\\
+返回关联到WINDOW上的名字。
+\item[-{}-] 函数：\verb|window-full-name window|\\
+返回和WINDOW关联的完整名字。这可能和正常的名字一样也可能不一样。
+\end{description}
+
+Sawfish提供了保证窗口名字独一无二的函数。
+\begin{description}
+\item[-{}-] 函数：\verb|uniquify-name proposal existing|\\
+和字符串列表EXISTING相比使字符串PROPOSAL独一无二化。使用格式字符串`uniquify-name-format'来产生独一无二的名字。
+\item[-{}-] 变量：\verb|uniquify-name-format|\\
+产生独一无二窗口名字的格式。默认为`\verb|"|\%s [\%d]\verb|"|'。
+\item[-{}-] 函数：\verb|uniquify-window-name window|\\
+\item[-{}-] 命令：\verb|uniquify-window-name window|\\
+强制使WINDOW拥有独一无二的标题。
+\item[-{}-] 函数：\verb|raname-window win name|\\
+改变窗口的名字为NAME。这在实际中可以用，但技术上ICCCM不假定窗口名字可以改变。
+\item[-{}-] 函数：\verb|window-class window #!optional spec|\\
+如果可选参数SPEC为`nil'，那么以字符串的形式返回WINDOW所属的类，如果WINDOW没有关联类，返回nil。
+
+ICCCM类由``实例''和``类''组成。如果SPEC是符号`cons'，那么点对`(INSTANCE . CLASS)'将成为返回值。如果SPEC是符号`configurator'，那么将返回形如``INSTANCE/CLASS''的字符串。
+\item[-{}-] 函数：\verb|window-role window|\\
+返回由`NET\_WM\_ROLE'设置的窗口角色。
+\item[-{}-] 函数：\verb|window-id window|\\
+如果窗口对象WINDOW关联到一个客户端窗口，那么返回一个定义它的交换标识符的整数，否则返回`nil'。
+\item[-{}-] 函数：\verb|root-window-id|\\
+返回管理中的屏幕的根窗口的数值ID。
+\item[-{}-] 函数：\verb|window-dimension window|\\
+以点对`(WIDTH . HEIGHT)'的形式返回窗口WINDOW的体积。返回值不包括框架。`window-frame-dimension'（参见框架函数）将返回将框架计算在内的体积。
+\item[-{}-] 函数：\verb|window-position window|\\
+以点对`(X，Y)'的形式返回由框架装饰的窗口的位置。
+\item[-{}-] 函数：\verb|display-window-position #!optional window|\\
+在弹射装置中显示WINDOW的位置和体积。如果参数为`nil'或者以一个命令的形式调用，用户可以通过光标和点击来选取窗口。
+
+这个函数定义在`sawfish.wm.util.display-wininfo'中。
+\item[-{}-] 函数：\verb|get-window-wm-protocols window|\\
+返回一个定义了X11中被客户端窗口所支持的窗口管理器协议的符号列表。
+\item[-{}-] 函数：\verb|window-supports-wm-protocol-p window atom|\\
+如果WINDOW在它的`WM\_PROTOCOLS'属性中包括ATOM就返回真。
+\item[-{}-] 函数：\verb|window-pid window|\\
+返回窗口进程ID号，如果窗口不可用就返回nil。
+\end{description}
+列举在这里的是窗口可视性的谓词：`stacking-visibility'、`window-obscured'、`window-visible-p'、`window-shaped-p'、`window-iconified-p'、`window-in-workspace-p'、`window-outside-viewport-p'。
+
+各种各样的谓词：
+\begin{description}
+\item[-{}-] 函数：\verb|window-mapped-p window|\\
+如果对象WINDOW所管理的客户端窗口被映射就返回`t'。（注意这不意味着它是可见的。）
+\item[-{}-] 函数：\verb|window-shaped-p window|\\
+如果WINDOW是有形状的（尽可能不是矩形的）就返回`t'。
+\item[-{}-] 函数：\verb|window-urgent-p window|\\
+如果关联到WINDOW上的窗口的``Urgency''标识被设置了就返回`t'。
+\item[-{}-] 函数：\verb|window-wants-input-p window|\\
+\item[-{}-] 函数：\verb|window-really-wants-input-p window|\\
+参见输入焦点。
+\end{description}
+\section{获取窗口}
+首先，应用在所有窗口上的函数。
+\begin{description}
+\item[-{}-] 函数：\verb|managed-windows|\\
+返回一个包含所有可管理的窗口对象的列表，排列顺序为它们被窗口管理器接管（第一到最后）的顺序。
+\item[-{}-] 函数：\verb|map-windows function|\\
+对所有存在的窗口调用`(FUNCTION WINDOW)'。返回最后一次函数调用的返回值。如果当中有一个FUNCTION调用返回了`nil'，那么`map-windows'立即返回`nil'。
+\end{description}
+
+获取特定窗口的函数。
+\begin{description}
+\item[-{}-] 函数：\verb|get-window-by-id xid|\\
+返回ID为XID的窗口对象或者`nil'。
+\item[-{}-] 函数：\verb|get-window-by-name name #!key regex icon|\\
+返回名字为NAME的窗口对象或者`nil'。就算有多个窗口匹配了，也只返回其中一个。
+
+如果`regex'不是nil，那么NAME将被视为正则表达式，并且和窗口名字进行匹配。
+
+如果`icon'不是il，那么搜索窗口的图标名称（由`NEW\_WM\_ICON\_NAME'而不是`NET\_WM\_ICON\_NAME'设置）而不是窗口的名称。
+\item[-{}-] 函数：\verb|get-window-by-class class #!regex|\\
+就像上面一样，但匹配对象为窗口的类。在这里，类不包括``instance''。（参见窗口属性中的`window-class'）
+
+选项`regex'是一个布尔值，而不是正则表达式，就像在`get-window-by-name'中一样。
+\item[-{}-] 函数：\verb|get-window-by-role role|\\
+与上面一样，但匹配对象是窗口的角色。
+
+选项`regex'是一个布尔值，而不是正则表达式，就像在`get-window-by-name'中一样。
+\item[-{}-] 函数：\verb|filter-windows pred|\\
+返回匹配谓词函数PRED的窗口的列表（不管有没有映射的）。
+\end{description}
+\section{窗口属性列表}
+很多窗口管理器的扩展需要被允许将Lisp数据关联到独立的窗口。例如，处理图标化的模块需要关联一个布尔值到每一个窗口------不管那个窗口是否已经图标化了。
+
+为了解决这个问题，Sawfish给了每一个窗口一个属性列表。确实存在和属性列表相似的存储每一个符号的手段；它们允许为每一个具体的窗口关联Lisp符号到值上去。
+
+注意这些属性不同于X为每一个窗口所存储的属性，因为这些属性是窗口管理器内部使用的（参见X属性）。
+
+要知道有哪些标准的窗口属性，参见标准属性。
+\begin{description}
+\item[-{}-] 函数：\verb|window-put window property value|\\
+设置关联到窗口对象WINDOW的名为PROPERTY的lisp属性的值为VALUE。注意这些是Lisp属性而非X属性。
+\item[-{}-] 函数：\verb|window-get window property #!optional checker|\\
+返回关联到窗口对象WINDOW上的名为PROPERTY（一个符号）的窗口属性，如果没有这么一个属性存在就返回`nil'。注意这些是Lisp属性而非X属性。
+
+如果第三个可选的参数CHECKER不是nil，那么CHECKER将在请求的属性不存在时被返回。这用来将分配的值与从属性不存在的情况的`nil'中进行区分。对于CHECKER，一个符号是不错的选择。
+\item[-{}-] 函数：\verb|map-windows-properties function window|\\
+对绑定到WINDOW的每一个Lisp属性调用`(FUNCTION PROPERTY VALUE)'。返回最后一次函数调用的返回值。如果有一个FUNCTION调用返回`nil'，那么`map-window-properties'就立即返回`nil'。
+\item[-{}-] 函数：\verb|window-plist window|\\
+以`(prop value prop value \ldots )'的形式返回窗口WINDOW的属性列表。
+
+不要企图通过在位置上修改的方式来改变属性。请使用window-put。
+\item[-{}-] 函数：\verb|window-remprop window property|\\
+移除WINDOW的PROPERTY。成功的时候返回`t'，如果属性不存在就返回`nil'。
+\end{description}
+\section{窗口类型}
+有一些窗口的``类型''是预定义好的。它们通过角色表示一个窗口的特殊本质。预定义的类型是``transient''、``desktop''和``dock''。
+
+一个类型总是在窗口出现的时候由应用程序通过标识来设置的。很多窗口并没有任何类型。
+
+``Transient''窗口是和一个主应用程序关联的弹出式或者对话式的窗口。它们趋向于更少的窗口装饰，并且只想要停留比较短的时间。
+\begin{description}
+\item[-{}-] 函数：\verb|window-transient-p window|\\
+如果WINDOW不是标记为短暂的窗口的话就返回`nil'。否则返回一个整数表示父窗口的交换标识符。
+\item[-{}-] 函数：\verb|mark-window-as-transient w|\\
+将与对象W关联的窗口标记为短暂的窗口。
+\item[-{}-] 函数：\verb|transient-of-p child parent|\\
+如果窗口CHILD是父窗口PARENT的一个直接的短暂存在就返回真，否则返回假。
+\item[-{}-] 函数：\verb|indirect-transient-of-p descendant ancestor|\\
+如果窗口DESCENDANT是窗口ANCESTOR的（直接或者间接）的短暂停留就返回真，否则返回假。
+\item[-{}-] 函数：\verb|transient-parents child #!optional indirectly|\\
+返回一个使CHILD处于短暂停留角色的窗口的列表。如果INDIRECTLY为真，那么返回返回包含所有祖先而不只是双亲的列表。
+\item[-{}-] 函数：\verb|transient-children parent #!optional indirectly|\\
+返回窗口PARENT的短暂停留的窗口的列表。如果INDIRECTLY为真，那么返回所有子孙而不仅仅是孩子。
+\item[-{}-] 函数：\verb|transient-group window #!optional by-depth|\\
+返回一个由窗口WINDOW的短暂停留或者使WINDOW成为短暂停留的窗口组成的列表。这总是包括W。`transient window for'的关系为直接或者间接成为父窗口的短暂停留的窗口保持。
+
+如果参数BY-DEPTH为真，那么返回会的列表为堆栈顺序。
+\item[-{}-] 函数：\verb|map-transient-group fun window|\\
+在窗口WINDOW的同一个短暂停留组中遍历所有的窗口调用一元函数FUN。
+\item[-{}-] 函数：\verb|raise-window-and-transients window|\\
+在堆栈顺序中将窗口WINDOW提升到允许的最高的位置。同时提升它的所有短暂停留的窗口。
+\item[-{}-] 函数：\verb|lower-window-and-transients window|\\
+在堆栈顺序中将窗口WINDOW降低到允许的最低的位置。同时降低它的所有短暂停留的窗口。
+\item[-{}-] 函数：\verb|raise-lower-window-and-transients window|\\
+如果窗口WINDOW在它自身所允许的最高位置上，那么将其尽可能地降到最低。否则尽可能地提升它。同时还将改变它持有的任何短暂停留的窗口的等级。
+\item[-{}-] 可定制：\verb|focus-windows-when-mapped|\\
+当应用程序窗口首次出现时切换为焦点。默认为真且必须为真或者假。
+\item[-{}-] 变量：\verb|decorate-transients|\\
+以和应用程序窗口相似的方式装饰对话窗口。默认为假。
+\end{description}
+
+``Desktop''窗口是指根窗口或者识口窗口。它们就像一个根窗口一样地接收按键。（就是说，使用`root-window-keymap'。）它们没有框架。
+\begin{description}
+\item[-{}-] 函数：\verb|desktop-window-p arg|\\
+当ARG表示一个桌面窗口时返回`t'。
+\item[-{}-] 函数：\verb|mark-window-as-desktop w|\\
+将与对象W关联的窗口标记为一个桌面窗口。
+\item[-{}-] 变量：\verb|desktop-window-properties|\\
+当一个窗口被标记为桌面窗口时被设置（为真）的属性列表。默认为(fixed-position sticky sticky-viewport)
+\item[-{}-] 变量：\verb|desktop-window-depth|\\
+桌面窗口的分层深度。默认为$-4$。
+\end{description}
+
+``Dock''窗口是停泊坞或者面板。它们默认是没有框架的。
+\begin{description}
+\item[-{}-] 函数：\verb|dock-window-p arg|\\
+当ARG表示一个停泊坞窗口时返回`t'。
+\item[-{}-] 函数：\verb|mark-window-as-dock w|\\
+将与对象W关联的窗口标记为一个停泊坞窗口。
+\item[-{}-] 变量：\verb|dock-window-properties|\\
+当一个窗口被标记为停泊坞窗口时被设置（为真）的属性列表。默认为(window-list-skip cycle-skip fixed-position focus-click-through avoid no-history never-iconify never-maximize sticky sticky-viewport placed)
+\item[-{}-] 变量：\verb|dock-window-depth|\\
+停泊坞窗口的分层深度。默认为0。
+\end{description}
+\section{输入焦点}
+输入焦点精确定义了哪一个客户端窗口将接收到由键盘所产生的事件。
+\begin{description}
+\item[-{}-] 函数：\verb|input-focus|\\
+返回当前聚焦的窗口的窗口对象，如果没有窗口处于焦点就返回`nil'。
+\item[-{}-] 函数：\verb|set-input-focus window|\\
+设置焦点为关联到WINDOW的客户端窗口。
+
+如果WINDOW为`nil'，那么没有窗口会获得焦点。
+\item[-{}-] 函数：\verb|window-wants-input-p window|\\
+如果你不确定，那么使用下面提及的函数`window-really-wants-input-p'。
+
+当窗口WINDOW在X的意义上需要输入焦点，就是说，如果在它的`WM\_HINTS'属性的`input'域有要求分配输入焦点就返回`t'。
+\item[-{}-] 函数：\verb|window-really-wants-input-p window|\\
+和`window-wants-input-p'一样，但是除此之外，这个函数还接收由Sawfish提供的帐户用户选项，就是说，这个窗口是否有`never-focus'属性。
+\end{description}
+
+窗口管理器负责在客户端窗口之间切换输入焦点。Sawfish实现了许多提供这些行为的``聚焦模式''。每一个聚焦模式都绑定到一个符号；这个实现是绑定到符号的`focus-mode'属性槽。
+\begin{description}
+\item[-{}-] 变量：\verb|focus-mode|\\
+定义了当前使用鼠标指派输入焦点的方法。这是一个来自列表`focus-modes'的符号。
+\item[-{}-] 变量：\verb|focus-modes|\\
+一个包含所有聚焦模式的名字的列表。内建的值为`enter-exit'、`enter-only'、`enter-click'以及`click'。
+\end{description}
+
+聚焦模式`enter-exit'在指针进入一个窗口或者离开聚焦中的窗口时改变焦点。聚焦模式`enter-only'在指针进入一个窗口而不是在它离开一个聚焦中的窗口时改变焦点。聚焦模式`click'在你点击一个窗口时改变焦点。聚焦模式`enter-click'是`enter-only'和`click'的并集，并且在满足任一条件时改变焦点。
+
+通过定义你自己的处理函数，完全可以添加额外的聚焦模式。处理函数必须遵循一个``focus-mode-handler''协议。
+\begin{description}
+\item[-{}-] 函数协议：\verb|focus-mode-handler window event-name #!optional args|\\
+一个实现了`focus-mode-handler'协议的函数可以用于定一个新的聚焦模式。一个`focus-mode-handler'对相关窗口接收到的事件作出响应。
+
+参数WINDOW是接收到这个事件的窗口。
+
+参数EVENT-NAME是下列的其中一个符号：
+\begin{description}
+\item[pointer-in] 
+\item[pointer-out] 指针进入或者退出了窗口。处理函数负责检查一个光标所进入的窗口是否需要输入事件。桌面从不接收`pointer-in'或者`pointer-out'；只有普通窗口这样做。
+\item[enter-root] 
+\item[leave-root] 指针进入或者退出了桌面（指WINDOW参数）。普通窗口从不接收`enter-root'和`leave-root'。
+\item[focus-in] 
+\item[focus-out] 窗口参数获得或者失去了焦点。注意`focus-in'处理函数并不负责更新窗口顺序的列表。
+\item[before-mode-change] 
+\item[after-mode-change] Sawfish在每一次窗口的聚焦模式发生改变前/后发送这个合成的信息给对应窗口。当全局聚焦模式改变时，所有窗口都收到这个事件。
+\item[add-window] Sawfish在映射了一个窗口之后立即发送这个事件给这个窗口。处理函数可以使用这个来初始化窗口内置的数据结构。
+\item[warp-if-necessary] 当弯曲光标可以使光标位置和聚焦模式保持``一致''时就在窗口中弯曲光标。例如，在`enter-exit'模式中当光标不再这个窗口中时我们弯曲光标。在`enter-only'模式中，我们在处于其它窗口而不覆盖桌面的情况下弯曲光标------一个窗口不会在光标从它移动到桌面时失去焦点。
+
+这个事件是通过`warp-cursor-to-window'实现的，因此Sawfish不会弯曲除非`warp-to-window-enabled'被置为真。
+\item[focus-revert] 聚焦的窗口消失了（参数WINDOW没有在这里使用）。聚焦模式需要通过将焦点设定到其它窗口来响应。如果一个聚焦的短暂停留的窗口消失了，那么焦点回归到消失的窗口所代表短暂停留的父窗口。在这里`focus-revert'没有被调用。
+\end{description}
+
+协议允许任意多的额外参数，但是没有再去定义了。任何处理函数都必须准备去接收并忽略它们。
+
+不支持的事件将被忽略。这个函数的返回值将被忽略。
+\item[-{}-] 函数：\verb|define-focus-mode name fun|\\
+定义一个名为NAME（一个符号）的新的聚焦模式。focus-mode处理器FUN实现了这个聚焦模式。
+
+更多信息参见`focus-mode-handler'的文档。
+\item[-{}-] 函数：\verb|set-focus-mode window mode|\\
+设置窗口WINDOW的聚焦模式为MODE。这将会对WINDOW触发`before-mode-change'和`after-mode-change'事件。
+\item[-{}-] 函数：\verb|warp-pointer-if-necessary window|\\
+生成一个`warp-if-necessary'事件并发送到窗口的聚焦函数上去。
+
+各种各样的函数在聚焦中的窗口从指针下移走时调用`warp-pointer-if-necessary'。
+\item[-{}-] 变量：\verb|focus-click-through|\\
+当处于`click'聚焦模式时，只有在该变量为`t'时点击产生的焦点的指派才会传递给客户端窗口（这是默认的行为）。
+
+这个选项可以通过设定窗口中的`focus-click-through'属性（使用`window-put'函数）而对每一个窗口单独设置。
+\item[-{}-] 变量：\verb|focus-within-click-event|\\
+当该变量为真时，当前命令将在一个click-to-focus按下按钮的事件中被调用。
+
+这是一个不定的对象，而不是一个普通变量。
+\end{description}
+
+Sawfish还维护着哪一个窗口是最近聚焦过的顺序。
+\begin{description}
+\item[-{}-] 函数：\verb|window-order #!optional workspace allow-iconified all-viewports|\\
+返回一个元素为窗口的列表，元素按最近聚焦的顺序排列。
+
+如果WORKSPACE是一个整数，那么列表只包含在那个工作区域中的窗口，否则就搜索所有工作区域中的窗口。
+
+如果ALLOW-ICONIFIED不是nil，那么列表中也包括图标化的窗口。如果`all-viewports'不是nil，那么工作区域的所有视口都将被扫描。
+\item[-{}-] 函数：\verb|window-order-push window|\\
+将窗口对象WINDOW压进聚焦堆栈中。
+\item[-{}-] 函数：\verb|window-order-pop window|\\
+从聚焦堆栈中移除窗口对象WINDOW。
+\item[-{}-] 函数：\verb|window-order-most-recent #!optional windows|\\
+返回在当前工作区域中最近被聚焦过的窗口。如果给定了可选参数WINDOWS，那么这个参数必须是一个窗口列表。桌面窗口以及那么含有`cycle-skip'属性的窗口一般情况下不会被包括。
+
+当参数为`t'时，IGNORE-CYCLE-SKIP关键字参数会强制函数去包括附有`cycle-skip'属性的窗口。
+\item[-{}-] 函数：\verb|focus-push-map window keymap|\\
+\item[-{}-] 函数：\verb|focus-pop-map window|\\
+为WINDOW维护一个二元的键映射。
+
+`focus-push-map'是KEYMAP为当前WINDOW所用，但保存了之前存在的键映射。我们可以通过`focus-pop-map'来恢复之前的键映射。
+
+这些函数本意是用于支持click-to-focus。它们执行一个健壮的规则：对一个二元堆栈压栈只会覆盖掉栈顶的元素，而对一个一元的堆栈进行出栈操作则没有影响。
+\item[-{}-] 函数：\verb|autoload-focus-mode name func|\\
+失踪。这看起来似乎没有用于任何地方，而它的行为是不清楚的。
+\item[-{}-] 函数：\verb|select-window|\\
+等待用户在一个窗口上单击左键并返回这个窗口。在这个过程中，鼠标光标会改变形状，并且所有正常的输入事件都被抑制直到有一个窗口被选中了为止。对于根窗口，返回`nil'。
+\item[-{}-] 变量：\verb|select-window-cursor-shape|\\
+选择窗口时使用的光标形状。默认为`crosshair'。
+\end{description}
+\section{X属性}
+X窗口系统将窗口和属性关联在一起（这和sawfish关联到窗口对象上的属性是完全独立的）。大多数跨客户端的通讯就是通过处理这些属性实现的。
+
+下面所定义的所有函数，用于操作X属性，可以接收一个WINDOW参数而不论是窗口对象，窗口的数值交换标识符（代表关联的客户端窗口）或者表示根窗口的符号`root'。
+
+Sawfish将X的原子（X属性的名字和数据类型）表示为符号。确实存在一个原子的名字和表示它们的符号的名字之间的对应关系。例如，X原子`STRING'由lisp符号`STRING'表示。
+\begin{description}
+\item[-{}-] 函数：\verb|list-x-properties window|\\
+返回一个在WINDOW上定义了X属性集的符号列表。
+\item[-{}-] 函数：\verb|delete-x-property window property|\\
+删除与WINDOW关联的名为PROPERTY（一个符号）的X属性。
+\item[-{}-] 函数：\verb|get-x-property window property|\\
+返回一个表示WINDOW的X属性PROPERTY的列表，结构为`(TYPE FORMAT DATA)'。如果不存在这个属性，返回nil。
+
+TYPE是定义了属性类型的原子。FORMAT是一个整数，是8、16或者32中的一个，它定义了每一个数据项的位数。DATA是一个数组，是一个8位格式属性的字符串或者一个整数向量。
+
+如果TYPE是`ATOM'并且FORMAT是32，那么DATA将是一个符号向量，表示读进来的原子。
+\item[-{}-] 函数：\verb|set-x-property window property data type format|\\
+将WINDOW的X属性PROPERTY设置为数组DATA，不管是一个字符串还是一个整数向量。
+
+TYPE是一个表示定义了属性的类型的原子的符号；FORMAT是8、16或者32，它定义了数据的值的位数。
+
+如果TYPE是`ATOM'并且FORMAT是32，那么任何在DATA中的符号都将被转换为它们的数值X原子。
+\end{description}
+
+标准的X属性的格式并不允许存储一个字符串数组，因此经常将其编码为一个拼接起来的字符串，由零字符分隔。这一般被成为``文本属性''。Sawfish有两个处理它们的函数：
+\begin{description}
+\item[-{}-] 函数：\verb|get-x-text-property window property|\\
+和`get-x-property'类似，不过返回`nil'或者一个字符串向量。
+\item[-{}-] 函数：\verb|set-x-text-property window property data|\\
+将WINDOW的X文本属性PROPERTY设置为字符串数组DATA。
+\end{description}
+
+也可以检测一个和管理中的窗口相关的属性的值是否更改过，只要使用`property-notify-hook'。参见标准挂钩。下列方便使用的函数利用了这个挂钩：
+\begin{description}
+\item[-{}-] 函数：\verb|call-after-property-changed prop fun|\\
+当名为PROP（一个符号）的X11属性更改时，安排函数FUN以`(window property state)'为参数进行调用。PROP同时可以是一个监视器的属性名字的列表。
+\end{description}
+\section{窗口组}
+Sawfish为处理ICCCM组而提供了额外的工具和命令。大多数``普通的''组就如同它们在ICCCM标准中描述的那样运作：窗口都有一个设置为组的领导的X窗口的ID的组属性。这是``组ID''，并且它们一般为正整数。另外，Sawfish允许组ID为：
+\begin{description}
+\item[负整数] 这是匿名的由用户定义的组。
+\item[符号] 这是命名的用户定义的组。取了名字的由用户定义的组在保存会话时作为窗口属性的一部分保存起来。
+\end{description}
+\begin{description}
+\item[-{}-] 函数：\verb|window-group-id window|\\
+如果WINDOW属于一个组，那么返回这个组的领导的X窗口ID。否则返回`nil'。
+\item[-{}-] 函数：\verb|window-group-ids|\\
+返回包含所有组ID的列表。
+\end{description}
+
+有一个确实命名的组总是存在，任何窗口要么属于要么不属于它们。
+\begin{description}
+\item[-{}-] 变量：\verb|peristent-group-ids|\\
+一个总是存在的命名的符号列表。
+\end{description}
+
+不管怎样，一个窗口总是只能属于一个组，并且总是属于这一个组。
+\subsection{将窗口指派到组}
+在Sawfish中是可以改变一个窗口所属的组的。使用`add-window-to-group'，或者在必要的时候你可以显式地设置窗口的`group'属性。
+\begin{description}
+\item[-{}-] 函数：\verb|add-window-to-group window group-id|\\
+将WINDOW放入GROUP-ID这个组中，取代之前的任何组关系。如果`GROUP-ID'为`nil'，那么Sawfish将窗口返回到任何由ICCCM支持成员关系的组当中。
+\item[-{}-] 函数：\verb|add-window-to-new-group window|\\
+将WINDOW放入一个新的组作为这个组的单一成员。这个一个用户定义的匿名组。函数返回新组的ID。
+\end{description}
+
+Sawfish的组分配不会废除ICCCM的组分配，只是抑制了它。函数`window-actual-group-id'实现了废除的功能。
+\begin{description}
+\item[-{}-] 函数：\verb|window-actual-group-id window|\\
+返回WINDOW的（Sawfish的）组ID。这是按照下面的偏好进行的：
+\begin{description}
+\item[*] 由Sawfish分配的组ID
+\item[*] 由ICCCM分配的组ID
+\item[*] 如果给定的窗口是短暂停留，那么取一个持有窗口的对应值。
+\item[*] 窗口自己的窗口ID。
+\end{description}
+这表示一个窗口至少是它自己的组的一部分。
+\end{description}
+
+下面的每一个函数都处理由上面的那些函数返回的``实际组ID''。
+\begin{description}
+\item[-{}-] 函数：\verb|windows-by-group group-id #!optional by-depth|\\
+返回持有GROUP-ID的组中的窗口组成的列表。如果BY-DEPTH不是nil，那么从最顶层到最底层，以分层顺序返回窗口。
+\item[-{}-] 函数：\verb|windows-in-group w #!optional by-depth|\\
+返回和窗口W在同一个组当中的窗口组成的列表。如果BY-DEPTH不为nil，那么从最顶层到最底层，以分层顺序返回窗口。
+\item[-{}-] 函数：\verb|map-window-group fun w|\\
+将一元函数FUN映射到所有和窗口W位于相同的组的所有窗口上。注意FUN必须依靠副作用而不是返回一个值。
+\item[-{}-] 函数：\verb|map-other-window-groups fun w|\\
+将一元函数FUN映射到所有和窗口W属于不同组中的所有窗口上。注意FUN必须依靠副作用而不是返回一个值。
+\item[-{}-] 函数：\verb|window-group-menu #!optional w|\\
+返回一个适合`popup-menu'的菜单定义。这个菜单将允许用户支配窗口W进入任何一个管理中的窗口所在的组，或者进入一个崭新的组中。窗口的当前组会被检查或者标记。
+\end{description}
+\subsection{对组进行操作}
+大多数处理窗口的函数也适用于窗口组。每一个这种函数以一个窗口为参数；受影响的组是那个窗口所属的组。
+\begin{description}
+\item[-{}-] 函数：\verb|iconify-group w|\\
+\item[-{}-] 函数：\verb|uniconify-group w|\\
+\item[-{}-] 函数：\verb|iconify-transient-group w|\\
+\item[-{}-] 函数：\verb|uniconify-transient-group w|\\
+使用这些操作就像使用他们的单窗口的副本一样。它们通过临时地绑定`iconify-group-mode'和`uniconify-group-mode'来运作。
+\item[-{}-] 函数：\verb|make-group-sticky w|\\
+\item[-{}-] 函数：\verb|make-group-unsticky w|\\
+使用这些操作就像使用他们的单窗口的副本一样。
+\item[-{}-] 函数：\verb|toggle-group-sticky w|\\
+如果窗口W是粘性的，那么移除所有在同一个组中的窗口的粘性。否则所有这个组中的窗口都具备粘性。
+\item[-{}-] 函数：\verb|send-group-to-workspace w workspace|\\
+\item[-{}-] 函数：\verb|send-group-to-next-workspace w count|\\
+\item[-{}-] 函数：\verb|send-group-to-previous-workspace w count|\\
+使用这些操作就像使用他们的单窗口的副本一样。
+\item[-{}-] 函数：\verb|send-group-to-current-workspace w|\\
+所有在W所属的中的窗口都从它们所在的工作区域移动到最近的W所在的工作区域中去。粘性窗口不会受影响。如果窗口有输入焦点并且在移动后是可视的，那么仍然保留输入焦点。
+\item[-{}-] 函数：\verb|move-group-to-current-viewport w|\\
+\item[-{}-] 函数：\verb|move-group-viewport w|\\
+\item[-{}-] 函数：\verb|move-group-left w|\\
+\item[-{}-] 函数：\verb|move-group-right|\\
+\item[-{}-] 函数：\verb|move-group-up w|\\
+\item[-{}-] 函数：\verb|move-group-down w|\\
+使用这些操作就像使用他们的单窗口的副本一样。
+\item[-{}-] 函数：\verb|raise-group w|\\
+\item[-{}-] 函数：\verb|lower-group w|\\
+\item[-{}-] 函数：\verb|raise-lower-group w|\\
+\item[-{}-] 函数：\verb|raise-group-depth w|\\
+\item[-{}-] 函数：\verb|lower-group-depth w|\\
+使用这些操作就像使用他们的单窗口的副本一样。
+\item[-{}-] 函数：\verb|set-group-frame-style w style|\\
+使用这些操作就像使用他们的单窗口的副本一样。
+\end{description}
+\section{激活窗口}
+当用户要使用一个窗口时，能够显示、聚焦、提升等是必须的。这一节的函数就做这些事情。
+\begin{description}
+\item[-{}-] 函数：\verb|display-window window|\\
+粗略地说，这个函数为用户做所有在创建WINDOW时必要的事情。
+
+这项操作按照下列顺序进行。如果窗口被图标化了，那么变成反图标化。窗口所在的工作区域和视口会被采用。如果有必要，接触渐变。（参见下面的`unshade-selected-windows'变量）然后调用下面提及的`activate-window'函数。
+
+这个函数在`sawfish.wm.util.display-window'模块中被定义。
+\item[-{}-] 函数：\verb|activate-window window|\\
+将窗口标记为窗口顺序的最上层的一个，如果有必要，调整窗口的大小，聚焦并且完全指针。如果窗口不允许这些操作就不要聚焦。
+\item[-{}-] 可定制：\verb|unshade-selected-windows|\\
+当该变量不为nil时，在选择窗口时接触渐变。
+\end{description}
+\section{窗口堆放}
+显示的堆放顺序决定了从上到下，到底哪一个窗口将被显示。这个列表由Sawfish来维护。提升或者降低一个窗口将改变它在这个列表中的位置。
+\subsection{堆放顺序}
+\begin{description}
+\item[-{}-] 函数：\verb|stacking-order|\\
+返回一个定义了从最上层到最下层，当前所有客户端窗口的堆放顺序的窗口对象的列表。
+\item[-{}-] 函数：\verb|mapped-stacking-order|\\
+和`stacking-order'类似，但只返回有映射的窗口。
+\item[-{}-] 函数：\verb|restack-windows list|\\
+按照窗口对象在列表LIST中出现的顺序重新堆放所有客户端窗口（从上到下）。所有没有指定的窗口的堆放顺序不会受影响。
+\end{description}
+
+Sawfish允许将堆放顺序作为一个层的序列进行管理，每一个窗口都有一个特定的深度。对于任何附有给定深度D的窗口，它会在所有附有比D小的深度的窗口之上，并且在所有深度比D大的窗口之下。它可能在其它深度为D的窗口的上方或者下方。
+
+每一个窗口的`depth'属性用于存储对应的深度。深度为零表示``普通''，负数的深度堆放在下面，而整数的深度则堆放在上面。
+\begin{description}
+\item[-{}-] 函数：\verb|stacking-order-by-depth depth|\\
+和`stacking-order'类似，但只返回具有DEPTH深度的窗口。
+\item[-{}-] 函数：\verb|window-depth window|\\
+返回WINDOW的深度。
+\item[-{}-] 函数：\verb|set-window-depth window depth|\\
+设置WINDOW的堆放深度为DEPTH，然后重新堆放窗口来反映这个变化。
+\end{description}
+
+用于改变堆放顺序的函数。
+\begin{description}
+\item[-{}-] 函数：\verb|window-on-top-p window|\\
+当WINDOW在它的堆放深度中为最上层时返回`t'。
+\item[-{}-] 函数：\verb|stack-window-below below above|\\
+改变窗口BELOW的堆放顺序以使其立即处于窗口ABOVE的下方。这个函数自己并不提升/降低窗口。
+\item[-{}-] 函数：\verb|stack-window-above above below|\\
+改变窗口ABOVE的堆放顺序以使其立即处于窗口BELOW的上方。这个函数自己并不提升/降低窗口。
+\item[-{}-] 宏：\verb|save-stacking-order \&rest forms|\\
+在一个隐式的`progn'中求值FORMS表达式，然后恢复原来的窗口堆放顺序，返回`progn'的值。
+\item[-{}-] 函数：\verb|restack-window w|\\
+假设当前堆放顺序是一个一致的状态，不包括窗口W的位置，恢复包括窗口W在内的一致状态。这是通过正确地提升或者降低窗口W来实现的。
+\end{description}
+\subsection{堆放可视性}
+这里有一些告诉用户一个窗口是如何被其它窗口覆盖的函数。
+\begin{description}
+\item[-{}-] 函数：\verb|stacking-visibility window|\\
+如果`window'是清楚的就返回`unobscured'，如果有一个或多个窗口完全遮挡了`window'就返回`fully-obscured'，或者如果一个或多个窗口部分地遮挡了`window'就返回`partially-obscured'。
+
+决定到底是完全还是部分遮挡的成本是很高的。如果`window-obscured'满足你的需求，那么相比于`stacking-visibillity'请优先使用它。
+\item[-{}-] 函数：\verb|window-obscured window|\\
+如果`window'是清楚的就返回`nil'，如果`window'被一个窗口完全遮挡了就返回`t'，如果`window'被部分遮挡就返回一个窗口列表。
+
+如果返回了一个导致部分遮挡的窗口的列表，将它们放在一起可能会也可能不会将`window'完全遮挡。
+\item[-{}-] 已废弃的函数：\verb|window-visibility window|\\
+返回一个定义了WINDOW的当前可见性的符号。可能返回的符号是`fully-obscured'、`partially-obscured'或者`unobscured'。
+
+`window-visibility'是不赞成使用的。当使用混合扩展时它不是可靠的，因为每一个窗口都被报告为没有遮挡。取而代之使用`window-obscured'和`stacking-visibility'。
+\end{description}
+\subsection{提升和降低窗口}
+久而久之，Sawfish积累了许多用于提升或者降低窗口的函数的微妙的变种。一个是作用在单一窗口上的函数集合。注意每一对函数名和命令名之间的细微的不同。
+\begin{description}
+\item[-{}-] 函数：\verb|lower-window window|\\
+\item[-{}-] 命令：\verb|lower-single-window window|\\
+在WINDOW的堆放深度中将其降到底部。
+\item[-{}-] 函数：\verb|raise-window window|\\
+\item[-{}-] 命令：\verb|raise-single-window window|\\
+在WINDOW的堆放深度中将其升到顶部。
+\item[-{}-] 函数：\verb|raise-lower-window window|\\
+\item[-{}-] 命令：\verb|raise-lower-single-window window|\\
+如果WINDOW在它的堆放层次中是最高层，那么将其降到所在层次的最底层，否则提升到最高层。
+\item[-{}-] 函数：\verb|x-raise-window win ref|\\
+\item[-{}-] 函数：\verb|x-lower-window win ref|\\
+提升/降低窗口WIN以使其处于窗口REF的上方/下方。如果REF没有定义，WIN将被放到堆放顺序的顶部/底部。
+\end{description}
+
+另一组函数支持对多个窗口同时进行处理。你需要在使用它们之前导入`sawfish.wm.util.stacking'包。同样，注意每一对函数名和命令名之间的细微的不同。
+\begin{description}
+\item[-{}-] 函数：\verb|lower-window* window|\\
+\item[-{}-] 命令：\verb|lower-window window|\\
+降低WINDOW并且可能将窗口和它们的堆放深度的底部进行关联。
+\item[-{}-] 函数：\verb|raise-window* window|\\
+\item[-{}-] 命令：\verb|raise-window window|\\
+提升WINDOW并且可能将窗口和它们的堆放深度的顶部进行关联。
+\item[-{}-] 函数：\verb|raise-lower-window* window|\\
+\item[-{}-] 命令：\verb|raise-lower-window window|\\
+如果WINDOW在它的堆放层次的最高层，那就降低它并可能将其和它们的层次的最底层进行关联，否则提升它们到所在层次的最高层。
+\item[-{}-] 可定制：\verb|user-raise-type|\\
+这个用户选项决定了哪一个窗口受到`lower-window*'、`raise-window*'和`raise-lower-window*'函数的影响。这个变量可以取
+\begin{description}
+\item[none] 只有被参数指定的窗口才受到影响
+\item[transients] 由参数指定的窗口以及它的所有兄弟窗口都受到影响。这是默认值。
+\item[group] 由参数指定的窗口和与其处于同一组的所有窗口都受到影响。
+\end{description}
+
+Sawfish在提升一个窗口到顶部和降低一个窗口到底部方面还有更通用的操作。它可以将一个窗口和一个或者多个其它正在管理的窗口放在一起。
+\begin{description}
+\item[-{}-] 函数：\verb|raise-windows w order|\\
+\item[-{}-] 函数：\verb|lower-windows w order|\\
+\item[-{}-] 函数：\verb|raise-lower-windows w order|\\
+按照ORDER的顺序提升（或降低）所有的窗口，在列表中排在前面的窗口将位于排在后面的窗口的上面（或下面）。窗口W是特别的，即使它处于ORDER的中间也会是最顶层或最下层的窗口。
+
+对于`raise-lower-windows'，如果W会被提升或者降低，那么所有的其它窗口也会被提升或者降低。
+\end{description}
+
+还有一些改变窗口的深度的函数（和相关命令）。
+\begin{description}
+\item[-{}-] 函数：\verb|lower-window-depth window|\\
+\item[-{}-] 命令：\verb|lower-window-depth window|\\
+减少WINDOW的堆放深度。
+\item[-{}-] 函数：\verb|raise-window-depth window|\\
+\item[-{}-] 命令：\verb|raise-window-depth window|\\
+增加WINDOW的堆放深度。
+\end{description}
+
+Sawfish为`click-to-focus'模式提供了特殊的支持，用于在你希望或者不希望去提升一个窗口或者向一个下层的应用程序传递点击的场合。
+\begin{description}
+\item[-{}-] 函数：\verb|raise-and-pass-through-click w|\\
+提升附带`maybe-raise-window'的接收到当前事件的窗口。然后重演调用这个命令的任何一个指针事件。
+\item[-{}-] 函数：\verb|raise-and-pass-through-click-if-focused w|\\
+提升附带`maybe-raise-window'的接收到当前事件的窗口（如果它是聚焦中的）。然后重演调用这个命令的任何一个指针事件。
+\item[-{}-] 函数：\verb|raise-or-pass-through-click w|\\
+如果接收到当前事件的窗口不再最顶层，那么通过`maybe-raise-window'来提升它。否则重演调用这个命令的任何一个指针事件，然后发送到这个窗口。
+\end{description}
+
+当上述命令以交互式方式调用时，Sawfish会尝试对接收当前事件的那个窗口调用它们。如果失败了，Sawfish会对当前聚焦的窗口调用它们。
+\end{description}
+\section{移动和调整窗口大小}
+就像之前（参见窗口属性）所注意到的那样，函数`window-dimension'和`window-position'返回一个窗口的当前配置。
+\begin{description}
+\item[-{}-] 函数：\verb|move-window-to window x y|\\
+将WINDOW的窗口框架的左上角移动到(X，Y)。
+\item[-{}-] 函数：\verb|resize-window-to window width height|\\
+将与对象WINDOW关联的客户端窗口的尺寸设置为(WIDTH，HEIGHT)。
+\item[-{}-] 函数：\verb|move-resize-window-to-window x y width height|\\
+将WINDOW的窗口框架的左上角移动到(X，Y)，并且设置框架的尺寸为(WIDTH，HEIGHT)。
+\item[-{}-] 函数：\verb|resize-window-with-hints window cols rows #!optional hints|\\
+\item[-{}-] 函数：\verb|resize-window-with-hints* window width height #!optional hints|\\
+遵照提示调整窗口WINDOW的大小。对于第一个函数，尺寸为COLS列和ROWS行。对于第二个函数，尺寸为WIDTH和HEIGHT像素。
+
+参数HINTS要么是用于体积提示的关联表，要么是在使用函数`window-size-hints'来接收窗口的提示时候的`nil'。
+
+提示可以指定每一个尺寸的最小值和最大值，也可以是增量，只要这两个函数是有关的。
+\item[-{}-] 函数：\verb|window-size-hints window|\\
+返回一个由与WINDOW关联的客户端窗口指定的定义了体积提示结构的关联表。在这个关联表中可能出现的键有`min-height'，`max-height'，`min-width'，`max-width'，`height-inc'，`width-inc'，`min-aspect'，`max-aspect'，`base-height'，`base-width'，`user-position'，`program-position'，`user-size'，`program-size'，`window-gravity'，`border-size'。
+\end{description}
+
+但是，一般配置窗口的任务是留给用户的。下面的函数可能会被交互式地调用：它们仅有的参数不是接收当前事件的窗口，就是现在聚焦中的窗口。
+
+当交互式地调整一个窗口的大小时，Sawfish优待`min-aspect'和`max-aspect'这两个窗口。
+\begin{description}
+\item[-{}-] 函数：\verb|move-window-interactively window|
+\item[-{}-] 命令：\verb|move-window-interactively window|\\
+使用鼠标交互式地移动WINDOW。放开鼠标的任何一个键会使窗口停留在当前位置。
+\item[-{}-] 函数：\verb|resize-window-interactively window|
+\item[-{}-] 命令：\verb|resize-window-interactively window|\\
+使用鼠标交互式地调整WINDOW的大小。放开鼠标的任何一个键会使窗口停留在当前位置。
+
+注意，当开始调整大小时，这些函数从鼠标的当前位置选择边缘或者窗口的边缘。窗口被切割为一个三乘三的网格；包含鼠标指针的矩形给出了调整大小的方向。如果指针位于中间的矩形上就移动底部和右边的边。
+\item[-{}-] 命令：\verb|resize-window-to-preset-size|
+\item[-{}-] 命令：\verb|resize-window-to-preset-height|
+\item[-{}-] 命令：\verb|resize-window-to-preset-width|\\
+对于这些函数，首先你将在一个配置器中指定一个窗口的尺寸。聚焦的窗口将在调用函数时被调整到预设的大小。
+\item[-{}-] 命令：\verb|resize-window-prompt window|\\
+系统提示你输入一个新的窗口大小，然后窗口将被调整为设定的大小。
+\item[-{}-] 函数：\verb|move-selected-window|
+\item[-{}-] 命令：\verb|move-selected-window|\\
+等待用户利用鼠标选择一个窗口，然后交互式地移动它。
+\item[-{}-] 函数：\verb|resize-selected-window|
+\item[-{}-] 命令：\verb|resize-selected-window|\\
+等待用户利用鼠标选择一个窗口，然后交互式地调整它的大小。
+\item[-{}-] 命令：\verb|double-window-size window|
+\item[-{}-] 命令：\verb|halve-window-size window|\\
+在每一个方向上倍增/减半WINDOW的大小，就是说，面积变为4或者$1/4$倍。
+\end{description}
+
+Sawfish允许在碰到另一个窗口之前一直增加窗口的大小。这叫做``生长''。``收缩''与此相反，就是说，它减少窗口大大小，直到不再覆盖任何其它窗口为止。更准确地说，生长可以重复地做，每一次都直到边与边相遇，而收缩则在覆盖少于一个窗口时结束。
+\begin{description}
+\item[-{}-] 函数：\verb|grow-window-up window #!optional arg|
+\item[-{}-] 函数：\verb|grow-window-down window #!optional arg|
+\item[-{}-] 函数：\verb|grow-window-left window #!optional arg|
+\item[-{}-] 函数：\verb|grow-window-right window #!optional arg|\\
+向上/下/左/右地伸展窗口直到它碰到另一个窗口。如果边缘在屏幕之外，那么它会被带回来。如果有一个通用的前缀ARG，那么取而代之在这个方向上最大化。如果是一个数值的前缀ARG，按照窗口或者像素指定的增量伸展。
+
+还有一样名字的命令。
+\item[-{}-] 函数：\verb|shrink-window-up window|
+\item[-{}-] 函数：\verb|shrink-window-down window|
+\item[-{}-] 函数：\verb|shrink-window-left window|
+\item[-{}-] 函数：\verb|shrink-window-right window|\\
+通过向上/下/左/右移动边来收缩WINDOW直到没有和任何窗口有交集。（因此，例如在`shrink-window-up'中，下面的边被拉动。）
+
+窗口不会被弄至比最小尺寸，或者`shrink-window-minimun-size'还小。更准确地说，尺寸的截断会使窗口比这些值更小。
+
+同样还有一些名字一样的命令。
+\end{description}
+
+移动副本而不是通过``生长''或者``收缩''来调整大小，用的是``包装''和``猛拉''。因此，``包装''移动窗口直到它们相遇，而``猛拉''则移动窗口直到没有覆盖。
+\begin{description}
+\item[-{}-] 函数：\verb|pack-window-up window #!optional arg|
+\item[-{}-] 函数：\verb|pack-window-down window #!optional arg|
+\item[-{}-] 函数：\verb|pack-window-left window #!optional arg|
+\item[-{}-] 函数：\verb|pack-window-right window #!optional arg|\\
+向上/下/左/右移动WINDOW直到碰到其它窗口。如果边超出了屏幕，它会被拉回来。如果带上一个通用前缀ARG，就在那个方向上最大限度地移动。如果带上一个数值的前缀ARG，那么就移动那么多像素。
+
+同样，还有一些名字一样的命令。
+\item[-{}-] 函数：\verb|yank-window-up window|
+\item[-{}-] 函数：\verb|yank-window-down window|
+\item[-{}-] 函数：\verb|yank-window-left window|
+\item[-{}-] 函数：\verb|yank-window-right window|\\
+向上/下/左/右猛拉WINDOW直到不覆盖任何一个窗口为止。
+
+同样还有命令一样的命令。
+\end{description}
+
+生长、包装、收缩和猛拉的具体行为可以通过下面的变量来定制：
+\begin{description}
+\item[-{}-] 变量：\verb|grow-is-maximize|\\
+是否将生长视为最大化。默认值为`t'。
+\item[-{}-] 变量：\verb|pack-warp-pointer|\\
+是否以及如何移动指针，值为`always'、`maybe'或者`never'中的一个。默认值为`maybe'。
+
+`maybe'意味着如果在包装之前指针在窗口内，那么它将随着窗口而移动。如果指针并没有在窗口中，那么`always'意味着将指针移动到窗口的中间，然后像`maybe'那样工作。`never'表示不弯曲指针。
+\item[-{}-] 变量：\verb|grow-pack-bump-obscured|\\
+是否与被完全遮挡的窗口相遇。默认值为`nil'。
+\item[-{}-] 变量：\verb|grow-pack-bump-other-depth|\\
+是否在不同的深度上与窗口相遇，值为`always'、`maybe'或者`never'。默认值为`always'。
+
+`maybe'意味着只有`avoided'窗口（参见可避免的窗口）是这么处理。
+\item[-{}-] 变量：\verb|grow-pack-bump-ignored|\\
+是否与忽略的窗口相遇。默认值为`t'。
+\item[-{}-] 变量：\verb|shrink-window-minimum-size|\\
+一个窗口可以收缩的最小的高度和宽度。默认值为`10'。
+\item[-{}-] 变量：\verb|yank-window-minimum-visible|\\
+在拉出了屏幕边缘的时候窗口剩下的可视部分的最小值。默认值为`10'。
+\item[-{}-] 函数：\verb|move-window-center window|
+\item[-{}-] 命令：\verb|move-window-center window|\\
+将WINDOW放置到屏幕中央（计算位置时包含了框架大小）。
+\end{description}
+
+交互式地移动和调整大小的行为可以通过下面的变量定制：
+\begin{description}
+\item[-{}-] 变量：\verb|move-outline-mode|\\
+一个定义了交互地移动窗口时的可视方法的符号。当前可用的选项有用于有线框架网格的`box'以及用于完全重现的`opaque'。
+\item[-{}-] 变量：\verb|resize-outline-mode|\\
+一个定义了交互地调整窗口大小时的可视方法的符号。当前可用的选项有用于有线框架网格的`box'以及用于完全重现的`opaque'。
+\item[-{}-] 变量：\verb|move-show-position|\\
+当不为nil时，窗口的当前位置在屏幕中央进行显示。
+\item[-{}-] 变量：\verb|resize-show-position|\\
+当不为nil时，窗口的尺寸大小在屏幕中央进行显示。
+\end{description}
+
+当你移动一个窗口并且它和另一个窗口很接近时，Sawfish调整它的位置使得两者的边相适应，或者说``拍上''。（这个的绰号可能叫做``交互式平铺''。）拍上也会以屏幕边缘为对照放置。
+\begin{description}
+\item[-{}-] 变量：\verb|move-snap-epsilon|\\
+在两条边开始拍上之前的以像素衡量的距离。这个值越大，窗口越有粘性。
+\end{description}
+
+窗口还有``重力''属性，这会影响它们在特定位置的放置效果。
+\begin{description}
+\item[-{}-] 函数：\verb|window-gravity window #!optional hints|\\
+返回一个窗口的重力。优先级顺序为Sawfish的`gravity'窗口属性、显式的HINTS参数以及X窗口尺寸提示。当没有指定任何东西时，默认的重力值为`north-west'（由ICCCM指定）。
+\end{description}
+\section{显示或者隐藏窗口}
+Sawfish提供了两个从显示中（反）撤回一个客户端窗口的低级函数。它们用于实现工作区域（参见工作区域）和图标化操作（参见图标化一个窗口）。
+\begin{description}
+\item[-{}-] 函数：\verb|hide-window window|\\
+阻止对象WINDOW被显示。
+
+这是个低级函数而且主要在内部使用。你更应该使用`iconify-window'。（参见图标化一个窗口）
+\item[-{}-] 函数：\verb|show-window window|\\
+确保WINDOW是可见的。（保证它被映射了并且在屏幕边缘之内）
+
+这是个低级函数而且主要在内部使用。对于交互式调用，你更应该使用`display-window'。（参见激活窗口）
+\item[-{}-] 函数：\verb|window-visible-p window|\\
+如果对象WINDOW没有被函数`hide-window'隐藏就返回`t'。
+\end{description}
+\section{摧毁窗口}
+有几个方法用于从显示器移除一个X11客户端窗口。它们在显示窗口及其应用程序的``优雅''水平上有所不同。
+\begin{description}
+\item[-{}-] 函数：\verb|delete-window window|
+\item[-{}-] 命令：\verb|delete-window window|\\
+删除窗口，就是说如果可能的话发送一个`WM\_DELETE\_WINDOW'客户端消息，否则仅仅杀死关联的X11客户端。WINDOW可以是一个窗口对象或一个数字的窗口id。
+\item[-{}-] 函数：\verb|delete-window-safely window|
+\item[-{}-] 命令：\verb|delete-window-safely window|\\
+如果应用程序自己的WINDOW允许，就向它发送一个`WM\_DELETE\_WINDOW'消息。否则仅仅发出一声蜂鸣。
+\item[-{}-] 函数：\verb|destroy-window window|
+\item[-{}-] 命令：\verb|destroy-window window|\\
+摧毁WINDOW而不给予持有它的应用程序任何警告。WINDOW可以是一个窗口对象或一个数字的窗口id。
+\item[-{}-] 函数：\verb|x-kill-client window|
+\item[-{}-] 命令：\verb|kill-client window|\\
+强制关闭一个创建了由WINDOW（一个窗口对象，或数字的id）指定的窗口的X11客户端。
+\end{description}
+
+当一个接管的窗口被摧毁时，`destroy-notify-hook'随后将被调用。（参见标准钩子）
+\section{遮蔽窗口}
+许多的窗口管理器允许一个窗口被``遮蔽''；当处于这种状态时只有窗口的标题栏是看得见的。
+\begin{description}
+\item[-{}-] 函数：\verb|window-shaded-p window|\\
+当WINDOW被遮蔽时返回真，否则返回假。
+\item[-{}-] 函数：\verb|shade-window window|
+\item[-{}-] 命令：\verb|shade-window window|\\
+安排只有WINDOW的标题栏是看得见的。
+\item[-{}-] 函数：\verb|unshade-window window|
+\item[-{}-] 命令：\verb|unshade-window window|\\
+如果窗口是遮蔽的，恢复它到原来的状态。
+\item[-{}-] 函数：\verb|toggle-window-shaded window|
+\item[-{}-] 命令：\verb|toggle-window-shaded window|\\
+切换窗口的遮蔽状态。
+\item[-{}-] 变量：\verb|raise-windows-when-unshaded nil|\\
+当为真时，当窗口解除遮蔽时提升它们。默认为假。
+\end{description}
+
+当窗口被遮蔽时窗口的`shaded'属性被设置为`t'。如果一个窗口带着这个已经设置好的属性被添加，那么窗口将以它的遮蔽状态出现。
+\section{最大化窗口}
+一个窗口的尺寸可以被临时``最大化''，在屏幕之内在一或两个维度上尽可能伸展。
+
+如果你有许多的显示器，最大化会在一个头中完成，除非显式说明它是Xinerama。
+\begin{description}
+\item[-{}-] 函数：\verb|window-maximizable-p window #!optional direction hints|\\
+当WINDOW可以最大化时返回`t'。窗口属性NEVER-MAXIMIZE阻止最大化。
+
+如果有定义，那么DIRECTION是一个符号，要么是`vertical'要么是`horizontal'，而且最大化将只发生在那个方向。
+
+可选参数HINTS废除窗口的提示。
+\item[-{}-] 函数：\verb|window-maximized-p window|\\
+当WINDOW在任何一个方向最大化时返回`t'。
+\item[-{}-] 函数：\verb|window-maximized-vertically-p window|\\
+当WINDOW是垂直地最大化时返回`t'，不管它是否水平最大化。
+\item[-{}-] 函数：\verb|window-maximized-horizontally-p window|\\
+当WINDOW是水平地最大化时返回`t'，不管它是否垂直最大化。
+\end{description}
+\subsection{基本的最大化}
+普通的最大化发生在当前屏幕上，而且可能为了适合字符尺寸而向下舍入。
+\begin{description}
+\item[-{}-] 函数：\verb|maximize-window window #!optional direction only-1d|
+\item[-{}-] 命令：\verb|maximize-window window|\\
+在屏幕上最大化WINDOW的两个维度。
+
+如果有定义，那么DIRECTION是一个符号，要么是`vertical'要么是`horizontal'，而且最大化将只发生在那个方向。
+
+可选参数ONLY-1D用于内部。别用它。
+\item[-{}-] 函数：\verb|maximize-window-vertically window|
+\item[-{}-] 命令：\verb|maximize-window-vertically window|
+\item[-{}-] 函数：\verb|maximize-window-horizontally window|
+\item[-{}-] 命令：\verb|maximize-window-horizontally window|\\
+在屏幕中最大化WINDOW的垂直或者水平维度。
+\item[-{}-] 函数：\verb|maximize-window-toggle window #!optional direction|
+\item[-{}-] 命令：\verb|maximize-window-toggle window|\\
+在屏幕中在最大化和取消最大化之间切换WINDOW的状态。
+
+如果有定义，那么DIRECTION是一个符号，要么是`vertical'要么是`horizontal'，而且最大化将只发生在那个方向。
+\item[-{}-] 函数：\verb|maximize-window-vertically-toggle window|
+\item[-{}-] 命令：\verb|maximize-window-vertically-toggle window|\\
+在屏幕中在水平最大化和取消最大化之间切换WINDOW的状态。
+\item[-{}-] 函数：\verb|maximize-window-horizontally-toggle window|
+\item[-{}-] 命令：\verb|maximize-window-horizontally-toggle window|\\
+在屏幕中在垂直最大化和取消最大化之间切换WINDOW的状态。
+\item[-{}-] 可定制的：\verb|move-lock-when-maximized|\\
+当为真时（默认），Sawfish将不允许用户手动调整最大化的窗口的大小。它也将阻止用户沿着它们最大化的轴移动窗口。
+
+例如，一个垂直地最大化的窗口被垂直地锁住，因此一个用户能够左右滑动它，但不能上下移动它。
+
+如果你设置它为`nil'而且调整了一个最大化的窗口的大小，那么你再也不能取消最大化。
+\item[-{}-] 函数：\verb|window-locked-vertically-p window|\\
+当WINDOW被垂直地锁住时返回`t'。
+\item[-{}-] 函数：\verb|frame-part-movable-p window part|\\
+如果WINDOW的PART可以被移动就返回`t'。
+
+PART是这些符号之一：`top-border'、`bottom-border'、`left-border'、`right-border'、`right-border'、`top-left-corner'、`top-right-corner'、`bottom-left-corner'、`bottom-right-corner'或`title'
+\item[-{}-] 变量：\verb|maximize-raises|\\
+当为真时（默认），最大化一个窗口的同时提升它。
+\item[-{}-] 变量：\verb|maximize-always-expands|\\
+一般来说，如果一个窗口的尺寸比屏幕大小大，最大化那个尺寸实际上收缩它以适合屏幕。当这个变量为真时（默认假），最大化一个窗口的尺寸永远不会收缩它。
+\end{description}
+\subsection{不重叠最大化}
+可以最大化一个窗口使它仅仅足够大而不与其它窗口重叠。
+\begin{description}
+\item[-{}-] 变量：\verb|maximize-avoid-avoided|\\
+当为真时（默认），最大化的窗口不会覆盖回避窗口。（参见回避窗口）
+\end{description}
+
+最大化命令的``fill''类别提供了最大化而不重叠到任何其它窗口上的一个方便的途径，出了``ignored''窗口。（参见忽略的窗口）
+
+另外，即使窗口已经比屏幕大小大它们也不收缩窗口。
+\begin{description}
+\item[-{}-] 函数：\verb|maximize-fill-window window #!optional direction|
+\item[-{}-] 命令：\verb|maximize-fill-window window|\\
+最大化WINDOW的两个维度而不与其它窗口重叠。
+
+如果有定义，那么DIRECTION是一个符号，要么是`vertical'要么是`horizontal'，而且最大化将只发生在那个方向。
+\item[-{}-] 函数：\verb|maximize-fill-window-vertically window|
+\item[-{}-] 命令：\verb|maximize-fill-window-vertically window|\\
+在屏幕中最大化WINDOW的垂直维度而不与其它窗口重叠。
+\item[-{}-] 函数：\verb|maximize-fill-window-horizontally window|
+\item[-{}-] 命令：\verb|maximize-fill-window-horizontally window|\\
+在屏幕中最大化WINDOW的水平维度而不与其它窗口重叠。
+\item[-{}-] 函数：\verb|maximize-fill-window-toggle window|
+\item[-{}-] 命令：\verb|maximize-fill-window-toggle window|\\
+在屏幕中在最大化和取消最大化之间切换WINDOW的状态而不与其它窗口重叠。
+
+如果有定义，那么DIRECTION是一个符号，要么是`vertical'要么是`horizontal'，而且最大化将只发生在那个方向。
+\item[-{}-] 函数：\verb|maximize-fill-window-vertically-toggle window|
+\item[-{}-] 命令：\verb|maximize-fill-window-vertically-toggle window|\\
+在屏幕上在垂直地最大化和取消最大化之间切换WINDOW的状态而不与其它窗口重叠。
+\item[-{}-] 函数：\verb|maximize-fill-window-horizontally-toggle window|
+\item[-{}-] 命令：\verb|maximize-fill-window-horizontally-toggle window|
+在屏幕上在水平地最大化和取消最大化之间切换WINDOW的状态而不与其它窗口重叠。
+\item[-{}-] 变量：\verb|maximize-ignore-when-filling|\\
+对于``填充''最大化，当为真时（默认）``ignored''窗口被忽略。（参见忽略的窗口）
+\end{description}
+\subsection{无边框最大化}
+最大化命令的``fullscreen''和``fullxinerama''类别将窗口最大化到一些范围并且移除所有窗口装饰。如果必要的话，Sawfish将填充底部和右边窗口边缘以使窗口填满整个范围。（例如，这对终端窗口是必要的。）
+
+``fullscreen''类别将窗口最大化到当前屏幕。
+\begin{description}
+\item[-{}-] 函数：\verb|maximize-window-fullscreen window state|
+\item[-{}-] 命令：\verb|maximize-window-fullscreen window|\\
+在屏幕上最大化WINDOW的两个维度，移除窗口装饰并且使窗口边缘紧贴屏幕边缘。
+
+如果STATE为nil，就取消最大化。否则，就最大化。如果以一个命令调用，它总是进行最大化。
+\item[-{}-] 函数：\verb|maximize-window-fullscreen-toggle window|
+\item[-{}-] 命令：\verb|maximize-window-fullscreen-toggle window|\\
+在屏幕中在最大化和不最大化之间切换WINDOW的状态，移除窗口装饰并且使窗口边缘紧贴屏幕边缘。
+\end{description}
+
+``fullxinerama''类别将窗口最大化到全部Xinerama显示器。
+\begin{description}
+\item[-{}-] 函数：\verb|maximize-window-fullxinerama window state|
+\item[-{}-] 命令：\verb|maximize-window-fullxinerama window|\\
+在所有Xinerama屏幕最大化WINDOW的两个维度，移除窗口装饰并且使窗口边缘紧贴屏幕边缘。
+
+如果STATE为nil，就取消最大化。否则，就最大化。如果以一个命令调用，它总是进行最大化。
+\item[-{}-] 函数：\verb|maximize-window-fullxinerama-toggle window|
+\item[-{}-] 命令：\verb|maximize-window-fullxinerama-toggle window|\\
+在所有Xinerama屏幕最大化和不最大化之间切换WINDOW的状态，移除窗口装饰并且使窗口边缘紧贴屏幕边缘。
+\end{description}
+\subsection{取消最大化}
+一个将窗口从所有不同类型的最大化中恢复的命令。
+\begin{description}
+\item[-{}-] 函数：\verb|unmaximize-window window #!optional direction|
+\item[-{}-] 命令：\verb|unmaximize-window window|\\
+将WINDOW的位置和尺寸恢复到它们原本的非最大化的状态。
+
+例如，如果WINDOW是垂直而不是水平最大化的，那么只有垂直的位置和尺寸被恢复。
+
+如果有定义，DIRECTION必须是`vertical'或`horizontal'之一的符号，而且取消最大化将只发生在那个方向。
+\item[-{}-] 函数：\verb|window-unmaximized-position window|\\
+返回一个指示着取消最大化后`window'将去到的位置的点对`(X . Y)'。
+
+例如，如果窗口是垂直而不是水平最大化的，那么Y是最大化之前的y坐标，而X是窗口的当前x坐标。
+\item[-{}-] 函数：\verb|window-unmaximized-dimensions window|\\
+返回一个指示着取消最大化后`window'将持有的尺寸的点对`(W . H)'。
+
+例如，如果窗口是垂直而不是水平最大化的，那么H是最大化之前的高度，而W是窗口的当前宽度。
+\item[-{}-] 函数：\verb|maximize-discard window #!optional direction|\\
+不再认为窗口是最大化的，保留大小和位置。你可以移动和调整大小，但不能够取消最大化。
+
+如果可选参数`direction'是`vertical'或`horizontal'，那么只有那个方向被最大化。
+
+当WINDOW不是最大化的时候，没有事情发生。
+\end{description}
+\section{在窗口间循环}
+Sawfish为在窗口间循环提供了两种命令。第一种以固定的次序在窗口间循环。第二种以一种动态次序在窗口间循环。
+\subsection{固定的窗口循环}
+这些命令将接管窗口的集合组织为循环。一个循环可以由一个工作区中所有窗口组成，或由任何地方的所有窗口组成。这个循环中的窗口位置不会改变，除非一个新窗口被接管或取消接管。
+\begin{description}
+\item[-{}-] 函数：\verb|next-workspace-window|
+\item[-{}-] 函数：\verb|previous-workspace-window|\\
+将焦点切换为当前工作区的``下一个''或``前一个''窗口。
+\item[-{}-] 函数：\verb|next-window|
+\item[-{}-] 函数：\verb|previous-window|\\
+将焦点切换为这个工作区中的``下一个''或``前一个''窗口。如果这个函数到达了这个工作区中的窗口的``末端''，它将切换到下一个工作区并且显示那里的第一个窗口。
+\end{description}
+\subsection{动态的窗口循环}
+这些命令通过维护一个最近使用的窗口的栈，实现了一些更接近于Microsoft Windows的$<$Alt-TAB$>$机制的东西。
+\begin{description}
+\item[-{}-] 函数：\verb|cycle-windows|
+\item[-{}-] 函数：\verb|cycle-windows-backwards|\\
+在所有可循环的窗口之间循环。
+\item[-{}-] 函数：\verb|cycle-group|
+\item[-{}-] 函数：\verb|cycle-group-backwards|\\
+在所有处于同一个组的窗口之间循环。这多少比得上Windows OS的<Control-TAB>行为。
+\item[-{}-] 函数：\verb|cycle-among-groups|
+\item[-{}-] 函数：\verb|cycle-among-groups-backwards|\\
+在处于组顶端的窗口之间循环。
+\item[-{}-] 函数：\verb|cycle-prefix|
+\item[-{}-] 函数：\verb|cycle-prefix-backwards|\\
+在所有标题和开始的窗口（向上但不包括第一个冒号）匹配的窗口之间循环。
+\item[-{}-] 函数：\verb|cycle-class|
+\item[-{}-] 函数：\verb|cycle-class-backwards|\\
+在所有类别和开始的窗口匹配的窗口之间循环。
+\item[-{}-] 函数：\verb|cycle-dock|
+\item[-{}-] 函数：\verb|cycle-dock-backwards|\\
+在所有在dock之中，甚至那些带有`cycle-skip'属性的窗口之间循环。
+\end{description}
+
+这些循环命令的每一个都可能包括在屏幕上不可见的窗口。
+\begin{description}
+\item[-{}-] 变量：\verb|cycle-include-iconified|\\
+如果为真，Sawfish在循环时包括了最小化的窗口。默认为真。
+\item[-{}-] 变量：\verb|cycle-all-workspaces|\\
+如果为真，Sawfish在循环时包括了在所有工作区的窗口。默认为假。
+\item[-{}-] 变量：\verb|cycle-all-viewports|\\
+如果为真，Sawfish在循环时包含了在所有视口上的窗口。默认为假。
+\end{description}
+
+可以通过配置循环来在处理过程中获得更多的反馈。
+\begin{description}
+\item[-{}-] 变量：\verb|cycle-show-window-names|\\
+如果为真，当在窗口间循环时Sawfish显示窗口名称和图标。默认为真。
+\item[-{}-] 变量：\verb|cycle-raise-windows t|\\
+如果为真，在循环过程中Sawfish会在窗口被临时选中时提升它们，而且调用`warp-pointer-if-necessary'。默认为真。
+\end{description}
+
+你也可以定义自己的栈循环命令，甚至改变窗口栈来适合你的口味。
+\begin{description}
+\item[-{}-] 函数：\verb|define-cycle-command name body &rest rest|\\
+创建一个不会导致当前循环操作在执行之前被中止的命令。
+
+所有参数都传递给define-command。
+\item[-{}-] 函数：\verb|define-cycle-command-pair forward-name reverse-name selector &rest rest|\\
+
+\end{description}
+
+\chapter{定制化}
+Sawfish提供了两级的配置：
+\begin{enumerate}
+\item ``定制化''：设置变量来改变窗口管理器的现有行为，以及，
+\item ``可扩展性''：通过创建新的Lisp模块来给窗口管理器添加全新的功能特征的能力。
+\end{enumerate}
+
+显然第一种方法相比第二种只要求更少的特定的知识。但即使是这样，用户也需要编辑包含设定变量的Lisp表达式的初始文件。为了免除这种手动编辑的需要，Sawfish提供了一个特殊的系统使得所有定制化可以通过GUI来完成，并且在每次窗口管理器启动时自动重新加载。
+\begin{description}
+\item[-{}-] 函数：\verb|customize #!optional group|
+\item[-{}-] 命令：\verb|customize|\\
+调用用户定制化GUI。GROUP定义了要配置的定制化变量的类别，如果没有定义就是所有类别。
+\end{description}
+
+也有像`customize:apperance'这样的命令存在，就是说，对于每一个顶级的定制化组，这些命令只配置它和其子组。
+
+`sawfish-config'程序可以用来手动开启GUI。
+
+但是，为了提供这些定制化选项，Lisp程序员被施加了额外的要求。`defcustom'宏现在必须被使用，以替代使用`defvar'特殊表达式来声明变量。它使变量带上用于GUI的额外信息，包括例如必要的数据类型的东西。
+\section{defgroup和defcustom}
+\section{定制化文件}
+\section{可定制变量的状态}
+\chapter{窗口框架}
+或许一个窗口管理器最重要的功能之一就是对客户端窗口进行修饰的能力，尤其是看到一个外加的边框，以及允许窗口被用户在边框上输入来操作。
+
+Sawfish提供了一个极其灵活的方法来装饰窗口，边框的外观和感觉可以被完全指定。同时，在哪一个窗口使用哪一种边框方面没有限制，如果有必要，可以为每一个窗口动态创建一个完全不同的边框。
+\section{框架基础}
+一个客户端窗口的``框架''被定义为所有由窗口管理器所添加的装饰。通常这些装饰会立刻被靠在窗口的外框上，但没有要求非要这么做。
+
+在Sawfish中，每一个框架都是由一个``框架部件''的列表构建成的，每一个都是一个概念上的矩形对象，被指定了和客户端窗口的边缘相关的位置。当有形状的图像被用来定义框架部件时，它们也被认为是矩形的，只是有些像素没有被显示出来。
+
+每一个框架部件都有一个和它关联的属性列表，包括定义了部件背景的项（就是说，一种颜色或一幅图片），以及定义了部件前景的项（例如，可能是带有颜色和字型等的一些文本）。不可见的属性也可能被定义，例如，在Lisp命令的部分中发生的要执行的键映射事件（参见键映射）。
+
+因此在Lisp中一个窗口框架被定义为一个框架组件定义的列表（参见框架组件定义）。这些框架组件被添加到客户端窗口上（按照它们被定义的顺序，因此晚出现的组件在同一位置的早出现的组件的上方），来产生一个完整的窗口框架。
+\section{框架部件类}
+尽管Sawfish的其中一个目标是提供最大可能的灵活性，但有时候这在全部体验时是有害的。例如，如果所有主题都在窗口框架的类似组件上使用一致的键映射和光标图片的话，对用户来说就会很容易用。那就是，如果所有关闭按钮在指针掠过头上时，都有一样的鼠标按钮绑定和显示的光标图片，那会更好。
+
+为了能够这么做，Sawfish定义了很多框件部件的``类别''，每一个都有很多的默认属性。当定义一个窗口框架时，每一个部件的定义都指定了是哪一个类别，或者继承自相关的默认属性（在没有显式地指定这些属性的值的时候提供）。
+\begin{description}
+\item[-{}-] 变量：\verb|frame-part-classes|\\
+这个变量是一个关联表，将给框架组件类别命名的符号和一个对应类别的默认属性的关联表联系起来。
+\end{description}
+
+下面是预定义的类别的名字，它们的含义已经在名字中了：
+\begin{verbatim}
+`title', `menu-button', `close-button', `iconify-button',
+`maximize-button', `sticky-button', `lock-button', `rename-button',
+`move-resize-button', `raise-lower-button', `top-border', `left-border',
+`right-border', `bottom-border', `top-left-corner', `top-right-corner',
+`bottom-left-corner', `bottom-right-corner'.
+\end{verbatim}
+通过添加`frame-part-classes'可以创建额外的类别。但是，很可能有不只一个主题需要使用同一个类别，而且用户可能希望定制额外的使用的键映射。添加新类别时应该使用`def-frame-class'宏，因为它处理上述情况。
+\begin{description}
+\item[-{}-] 宏：\verb|def-frame-class class alist-form &rest binding-forms ...|\\
+创建一个由符号CLASS命名的新框架部件类别。
+
+ALIST-FORM被求值以得到一个为类别定义了属性的关联表。每一对键-值对只有在键不存在现有的值的时候才被设置。
+
+如果给出了BINDING-FORMS，那么如果这个类别没有现有的键映射它就会被求值。创建一个键映射，然后存储在名为`CLASS-name'的变量中。这个变量会稍后在BINDING-FORMS中用到。
+\end{description}
+
+因此为了定义一个假定的`shade-button'类，可能会像下面这么用：
+\begin{verbatim}
+(def-frame-class shade-button '((cursor . left_ptr))
+       (bind-keys shade-button-keymap
+         "Button1-Off" 'toggle-window-shaded))
+\end{verbatim}
+
+有些场合覆盖一个预定义的框架部件的属性是重要的。例如，你可能偏好窗口标题中的文本总是蓝色的。
+\begin{description}
+\item[-{}-] 函数：\verb|define-frame-class class alist-form #!optional with-keymap|\\
+定义一个由符号CLASS命名的新框架部件类别。
+
+和`def-frame-class'不一样，尾部的参数是一个布尔标记。这个标记只表示是否为这个类别创建一个键映射。任何绑定都必须通过单独调用`bind-keys'来建立。
+
+如果可以建立和绑定空的键映射，那么函数返回`t'，否则返回`nil'。这允许我们检查错误。
+\item[-{}-] 变量：\verb|override-frame-part-classes|\\
+和`frame-part-classes'相似，除了带高于值的优先级的属性在变量和框架风格本身两边都有定义。
+\end{description}
+
+下面的函数用于简化这两个变量的定制化操作：
+\begin{description}
+\item[-{}-] 函数：\verb|set-frame-part-value class key value #!optional override|\\
+将类别CLASS中的所有框架部件的属性KEY与VALUE进行关联。
+
+如果OVERRIDE不为nil，那么设置被安装在`override-frame-part-classes'变量中，否则存储在`frame-part-classes'变量中。
+\end{description}
+
+下面的例子会覆盖在所有标题栏中的颜色：
+\begin{verbatim}
+(set-frame-part-value 'title 'background
+                           '("black" "white" "green" "blue") t)
+\end{verbatim}
+（关于这里具体怎么设置的细节请参见下一节。）
+\section{框架部件定义}
+\section{框架函数}
+\chapter{工作区}
+工作区为用户提供了另一种在Sawfish中组织他们的窗口的方式。不像视口，工作区之间没有几何关系。
+
+术语``虚拟桌面''有时候用来代替``工作区''。
+\section{工作区间隔}
+尽管工作区栈在概念上从负无穷大直到正无穷大，但我们一般只显示第一个非空工作区到最后一个非空工作区给用户。非空的间隔有时候被重新规格化为零。
+
+我们一般用较低的ID来索引处于具有较高ID的工作区``左边的''工作区，就像在一个数轴上。
+\begin{description}
+\item[-{}-] 变量：\verb|current-workspace|\\
+当前激活的工作区的ID。这是一个整数。``默认的''工作区的ID为0。
+\item[-{}-] 函数：\verb|workspace-limits|\\
+返回一个定义了连续工作区中的一个让用户``感兴趣''的子集的对`(FIRST-INDEX . LAST-INDEX)'（一般情况下，那些都是被显示地创建的）。
+\item[-{}-] 函数：\verb|workspace-id-to-logical space-id #!optional limits|\\
+
+\end{description}
+
+\section{工作区处理}
+\section{边缘动作}
+边缘动作是一个用于控制屏幕边框和边角的行为的集中化方式，提供了高度定制功能。
+
+它由下列模块组成：`sawfish.wm.edge.subrs'------包含了C子程序，`sawfish.wm.edge.utils'------一个实用工具函数的集合，`sawfish.wm.edge.conf'------基础配置设施，`sawfish.wm.edge.actions'------基础函数设施模块，`sawfish.wm.edge.flip'------边缘翻转函数，`sawfish.wm.edge.hot-spots'------热点函数和`sawfish.wm.edge.viewport-drag'------用于拖曳视口的函数。
+\section{边缘动作内部装置}
+C子程序（`sawfish.wm.edge.subrs'）：
+\begin{description}
+\item[-{}-] 函数：\verb|create-flippers|\\
+创建翻转器窗口，用于使你的屏幕边框纯粹化。当翻转器窗口被激活时动作就被执行。技术上它是一个窗口，但在用户的角度它由8个部分组成（4条边框加4个边角）。
+\item[-{}-] 函数：\verb|destroy-flippers|\\
+摧毁翻转器窗口。
+\item[-{}-] 函数：\verb|recreate-flippers|\\
+重建翻转器窗口，当分辨率改变时这是自动完成的，以保证边缘动作保持正常工作。
+\item[-{}-] 挂钩：\verb|enter-flipper-hook|\\
+当翻转器窗口被创建时这个挂钩被调用。
+\item[-{}-] 挂钩：\verb|leave-flipper-hook|\\
+当离开翻转器窗口时这个挂钩被调用。
+\end{description}
+
+
+实用工具（`sawfish.wm.edge.utils'）：
+\begin{description}
+\item[-{}-] 函数：\verb|activate-flippers t|\\
+一个围绕`recreate-flippers'和`destroy-flippers'的包装函数，额外添加了（各自移除）必要的挂钩函数。
+\item[-{}-] 函数：\verb|get-active-corner|\\
+这个函数返回一个进入的翻转器窗口的边角或是nil。
+\item[-{}-] 函数：\verb|get-active-border|\\
+这个函数返回一个进入的翻转器窗口的边框或是nil。
+\end{description}
+
+基础配置设施（`sawfish.w.edge.conf'）：
+\begin{description}
+\item[-{}-] 可定制：\verb|edge-actions-enabled nil|\\
+全局配置，用于启动或者关闭边缘动作。
+\item[-{}-] 可定制：\verb|left-right-edge-action 'none/hot-spot|\\
+当左右屏幕边缘被指针点击时执行的动作，值为flip-workspace、flip-viewport、viewport-drag或者none/hot-spot的其中之一。
+\item[-{}-] 可定制：\verb|left-right-dege-move-action 'none|\\
+当一个窗口被拖曳到超过左右屏幕边缘时执行的动作，值为flip-workspace、flip-viewport、viewport-drag或者none的其中之一。
+\item[-{}-] 可定制：\verb|top-bottom-edge-action 'none/hot-spot|\\
+当顶部和底部屏幕边缘被指针点击时执行的动作，值为flip-workspace、flip-viewport、viewport-drag或者none/hot-spot的其中之一。
+\item[-{}-] 可定制：\verb|top-bottom-edge-move-action 'none|\\
+当一个窗口被拖曳到超过顶部和底部屏幕边缘时执行的动作，值为flip-workspace、flip-viewport、viewport-drag或者none的其中之一。
+\item[-{}-] 可定制：\verb|edge-flip-delay 250|\\
+视口/工作区的翻转的延迟（以毫秒计算）。
+\item[-{}-] 可定制：\verb|hot-spot-delay 150|\\
+在激活热点之前的延迟（以毫秒计算）。
+\item[-{}-] 可定制：\verb|hot-spots-corner-length 50|\\
+热点边角所使用的以像素为单位的长度（在x和y两个方向）。所有剩下的像素代表边框。
+\item[-{}-] 可定制：\verb|viewport-drag-distance 64|\\
+每一次指针单击屏幕边缘时拖曳视口的数量（以像素计算）。
+\item[-{}-] 可定制：\verb|viewport-drag-cursor-distance 32|\\
+
+\end{description}
+
+功能基础设施（`sawfish.wm.edge.actions'）：
+\begin{description}
+\item[-{}-] 函数：\verb|activate-edges t|\\
+这个函数调用`activate-flippers'并且添加必要的挂钩函数以启用在边缘执行用户动作的功能。
+\item[-{}-] 函数：\verb|activate-edges-after-set|\\
+这个函数由`edge-actions-enabled'可定制变量使用来从Sawfish配置器和源文件（反）激活边缘动作。
+\item[-{}-] 函数：\verb|edge-action-call func edge|\\
+这个函数在屏幕边缘`edge'调用期待的用户动作`func'。
+\item[-{}-] 函数：\verb|edge-action-hook-func|\\
+这个挂钩函数要么用于调用`hot-spot-invoke'（如果一个角落被激活了）要么调用`edge-action-call'来执行一个动作，当边缘被指针激活的时候。
+\item[-{}-] 函数：\verb|edge-action-move-hook-func|\\
+如果拖曳一个窗口经过边缘时被激活，这个挂钩函数负责调用`edge-action-call'来执行一个动作。这时候热点不被支持。
+\end{description}
+
+边缘翻转（`sawfish.wm.edge.flip'）：
+
+这是传统的边缘翻转。当一个窗口或者指针击中屏幕边缘时，屏幕在这个方向上被移动一个视口或者一个工作区。指针被有依据地卷曲（保持逻辑位置）。
+\begin{description}
+\item[-{}-] 函数：\verb|edge-flip-invoke edge type|\\
+这个函数启动边缘翻转。边缘（一个符号）是被激活的屏幕边缘（left，right，top，bottom），类型是`workspace'或者`viewport'。
+\end{description}
+
+视口拖曳（`sawfish.wm.edge.viewport-drag'）：
+
+iViewportDrag（从前叫Infinite-Desktop）是一个机制，根据被激活的屏幕边缘移动视口。这种情况乡下视口变得虚拟的``无限''，而不管物理的尺寸（因此这是旧的名字）。
+\begin{description}
+\item[-{}-] 函数：\verb|viewport-drag edge|\\
+这个函数启动视口拖曳。边缘是被激活的屏幕边缘（left，right，top，bottom）（一个符号）。
+\end{description}
+
+热点（`sawfish.wm.edge.hot-spots'）：
+
+热点是一个机制，允许特定的事物在一个屏幕边缘或角落被激活时完成。角落由`hot-spots-corner-length'定义。只有热点对应角落。
+
+你的屏幕边缘实际上被分隔为12份：4个角落，两倍的4个边缘（就像上面解释的那样动作被分隔为移动一个窗口和使用指针激活一个边缘时）。角落在移动一个窗口时不被识别。
+
+热点只允许函数被用作动作，尽管任何事物都可以被这么完成。如果参数不是一个函数，将抛出一个错误，来提醒用户。
+\begin{description}
+\item[-{}-] 可定制：\verb|left-edge-function nil|\\
+当击中左边缘时启动的函数。
+\item[-{}-] 可定制：\verb|top-left-corner-function nil|\\
+当击中左上角时启动的函数。
+\item[-{}-] 可定制：\verb|top-edge-function nil|\\
+当击中上边缘时启动的函数。
+\item[-{}-] 可定制：\verb|top-right-corner-function nil|\\
+当击中右上角时启动的函数。
+\item[-{}-] 可定制：\verb|right-edge-function nil|\\
+当击中右边缘时启动的函数。
+\item[-{}-] 可定制：\verb|bottom-right-corner-function nil|\\
+当击中右下角时启动的函数。
+\item[-{}-] 可定制：\verb|bottom-edge-function nil|\\
+当击中下边缘时启动的函数。
+\item[-{}-] 可定制：\verb|bottom-left-corner-function nil|\\
+当击中左下角时启动的函数。
+\item[-{}-] 函数：\verb|hot-spot-invoke spot|\\
+这个函数启动热点。点（一个符号）是left，top-left，top，top-right，right，bottom-right，bottom或者bottom-left之一。
+\end{description}
+
+配置例子（`~/.sawfishrc'）：
+
+注意：这只是个例子，不是这里的所有函数都可以在你的系统上使用。
+\begin{verbatim}
+( defvar-setq edge-flip-delay 250 )
+( defvar-setq hot-spot-delay 125 )
+
+( defvar-setq top-left-corner-function
+  ( lambda () ( tile-windows ) ) )
+
+( defvar-setq top-right-corner-function
+  ( lambda () ( pager-unhide ) ) )
+
+( defvar-setq  bottom-right-corner-function
+  ( lambda () ( show-desktop ) ) )
+
+( defvar-setq bottom-left-corner-function
+  ( lambda () ( raise-window ( get-window-by-role "panel_" #:regex t ) ) ) )
+
+( defvar-setq top-edge-function
+  ( lambda () ( jump-or-exec "Konsole" "konsole" #:match-class t ) ) )
+
+( defvar-setq bottom-edge-function
+  ( lambda () ( jump-or-exec "Dolphin" "dolphin" #:match-class t ) ) )
+
+;; actions when pointer hits edge
+( defvar-setq left-right-edge-action 'flip-viewport )
+( defvar-setq top-bottom-edge-action 'none/hot-spot )
+
+;; actions while moving window hits edge
+( defvar-setq left-right-edge-move-action 'flip-workspace )
+( defvar-setq top-bottom-edge-move-action 'none )
+\end{verbatim}
+\chapter{弹出式菜单}
+Sawfish支持``弹出式菜单''。弹出式菜单的每一行要么是一个动作要么是子菜单的双亲。除了一起的按键和鼠标绑定，弹出式菜单向用户提供了调用方法的命令。
+\section{现成的弹出}
+首先，让我们从整体上看看弹出式菜单。弹出式菜单包括根菜单、窗口操作菜单、窗口列表菜单、应用程序菜单等。
+
+``根菜单''显然是最重要的一个。从根菜单可以做很多事情，包括调用其他菜单。默认情况下，你可以通过在背景屏幕中键单击来调用根菜单，就是说，所有窗口之外。
+
+``窗口操作菜单''正如它的名字所描述的一样。你可以从窗口的框架像按钮或者标题栏中调出它来，取决于所使用的主题。
+
+``窗口列表菜单''让你可以选择一个窗口。当选定后，窗口就会被显示，提升和聚焦。
+
+``应用程序菜单''让你可以调用软件。有很多可用的选项，它们将在下一节讲述。（参见应用程序菜单）
+
+弹出式菜单的调用函数可以从键盘或者鼠标来调度。
+\begin{description}
+\item[-{}-] 函数：\verb|popup-root-menu|\\
+显示主菜单。
+\item[-{}-] 函数：\verb|popup-window-ops-menu|\\
+显示窗口操作菜单。这个默认有很多的绑定。尤其是，单击窗口的菜单按钮会显示这个列表。
+\item[-{}-] 函数：\verb|popup-window-list-menu|\\
+显示包含有所有打开的窗口的列表的菜单。
+\item[-{}-] 函数：\verb|popup-apps-menu|\\
+弹出应用程序菜单。
+\end{description}
+
+这里还有弹出式菜单选项。
+\begin{description}
+\item[-{}-] 变量：\verb|menus-include-shortcuts|\\
+当变量为真时，菜单项还将显示键绑定。默认为假。
+\end{description}
+
+实际建立弹出式菜单是由一个辅助进程来实现的。默认情况下，它在菜单使用完后依然存在，在下一次调用时重新使用。
+\begin{description}
+\item[-{}-] 变量：\verb|menu-program-stays-running|\\
+决定是否以及在最后的菜单完成后菜单程序还要单独存在多久。如果是`nil'，程序就立即终结。这意味着每一次调用弹出式菜单，菜单程序就运行一次。
+
+如果为`t'就留下来不终止地运行，如果是一个整数就持续运行这么多秒。
+\end{description}
+
+你可以更改菜单。参见弹出式菜单定义。
+\section{应用程序菜单}
+应用程序菜单使你可以调用已经安装的应用程序。Sawfish在启动的时候从`*.desktop'（一般在`/usr/share/applications/'中可以找到）文件来生成应用程序菜单。
+
+这一节中的函数在`sawfish.wm.ext.apps-emnu'模块中定义。
+\subsection{应用程序菜单变量}
+\begin{description}
+\item[-{}-] 变量：\verb|apps-menu-autogen|\\
+如果不为nil，那么应用程序菜单就自动从`user-apps-menu'和`*.desktop'文件中生成，然后存储在变量`apps-menu'中。默认为`t'。
+
+如果你手动设置应用程序菜单为变量`apps-menu'，那么无论如何都不会奏效。
+\item[-{}-] 变量：\verb|desktop-cat-alist|\\
+定义了应用程序的分类。例如，如果一个`*.desktop'文件的分类有一个项目是`X-Desktop'，那么默认地Sawfish会将它归类为``Desktop''。
+
+如果另一个选项`apps-menu-associate-categories'被设置为nil，那么就遵照设定在`*.desktop'中的原始值。
+
+如果你希望定制这个变量，参见文件`lisp/sawfish/wm/ext/apps-menu.jl'中的默认值。
+\item[-{}-] 变量：\verb|apps-menu-associate-categories|\\
+参见上面。默认为`t'。
+\item[-{}-] 变量：\verb|apps-menu-filter|\\
+当生成`apps-menu'时使用的过滤器。关于细节参见桌面文件处理。
+
+它可以是一个符号`default'、`some'或者一个函数。
+
+`default'过滤器包括`fdo-toplevel-filter'、`fdo-nodisplay-filter'、`fdo-hidden-filter'、`fdo-onlyshowin-filter'和`fdo-notshowin-filter'。这是默认值。
+
+`some'过滤器只使用`fdo-notshowin-filter'和`fdo-onlyshowin'filter'。
+
+如果变量被设置为nill，那么不会使用任何一个过滤器。
+\item[-{}-] 变量：\verb|desktop-directory|\\
+查找*.desktop文件的目录的列表。默认为`(\verb|"|/usr/share/applications\verb|"|)'。
+\item[-{}-] 变量：\verb|kde-desktop-directories|\\
+KDE所定制的存储*.desktop文件的目录。
+\item[-{}-] 变量：\verb|apps-menu-alphabetize|\\
+按照字典顺序排列生成的应用程序菜单。默认为`t'。
+\item[-{}-] 变量：\verb|apps-menu-lang|\\
+用于生成应用程序菜单的人类语言，为字符串，像``en''表示英语。默认从区域设置中得到。
+\end{description}
+
+你可以预设任何东西到应用程序菜单中去，只要设定变量`user-apps-menu'。一个示例定义：
+\begin{verbatim}
+(("_xterm" (system "xterm &"))
+ ("Emacs" (system "emacs &"))
+ ("Firefox" (system "firefox &"))
+ ("The _GIMP" (system "gimp &"))
+ () ; Seperation horizontal bar
+ ) ;; Auto generated menu will follow.
+\end{verbatim}
+`system'函数只是简单地使用`/bin/sh'来执行它唯一的参数。下划线定义了键盘快捷键。
+
+如果你给`apps-menu'设定值，Sawfish就不从`*.desktop'文件中生成应用程序菜单了。
+\begin{description}
+\item[-{}-] 变量：\verb|apps-menu|\\
+这个变量包含了应用程序菜单的定义。默认情况下，Sawfish自动设置这个变量。
+
+如果你手动设置它，那么将只使用它，并且Sawfish不生成应用程序菜单。
+\item[-{}-] 变量：\verb|user-apps-menu|\\
+你自己的应用程序菜单项。在应用程序菜单中，这排在自动生成的应用程序菜单之后。
+\end{description}
+\subsection{应用程序菜单函数}
+\begin{description}
+\item[-{}-] 函数：\verb|popup-apps-menu|\\
+显示应用程序菜单。
+\item[-{}-] 函数：\verb|update-apps-menu|\\
+将`apps-menu'设置为`user-apps-menu'，并且如果`apps-menu-autogen'不是nil，那么就追加生成的项目。
+\item[-{}-] 函数：\verb|generate-apps-menu|\\
+返回应用程序菜单（一个列表），从`*.desktop'文件中生成并且可以设置到`apps-menu'中去。
+\end{description}
+
+这里有处理每一个桌面文件的函数。同时参见下一节。（参见桌面文件处理）
+\begin{description}
+\item[-{}-] 函数：\verb|parse-fdo-file file|\\
+解析FILE列举的*.desktop文件。返回`(group (key1 . value1) ... group2 (keyA . valueA))'。
+\item[-{}-] 函数：\verb|fdo-filter-record fdo-list filter|\\
+让FILTER处理一个桌面文件条目FDO-LIST，然后返回结果。
+
+如果FILTER是一个函数，它将带参数FDO-LIST运行。如果是符号`default'或者`some'，那么分别执行`fdo-default-filter'或者`fdo-some-filter。如果没有定义FILTER，将返回输入`fdo-list'。
+
+这在测试过滤器方面很有用，而且也可以在内部使用。
+\end{description}
+\subsection{桌面文件处理}
+在这一节中，将展示Sawfish在构建应用程序菜单时如何处理桌面文件条目。每一个条目传递给很多``过滤器''，而它们正是你想要定制的。
+
+桌面文件条目被表达为一个列表。这里有一个没有被任何过滤器处理前的`emacs.desktop'的例子：
+\begin{verbatim}
+("Desktop Entry"
+      ("Name" . "Emacs Text Editor")
+      ("Name[de]" . "Emacs Texteditor")
+      ("GenericName" . "Text Editor")
+      ("Comment" . "Edit text")
+      ("Exec" . "emacs %f")
+      ("Icon" . "emacs-icon")
+      ("Type" . "Application")
+      ("Terminal" . "false")
+      ("Categories" . "Development;TextEditor;")
+      ("StartupWMClass" . "Emacs"))
+\end{verbatim}
+
+接着它被分割为两份列表。最初的\verb|"|Categories\verb|"|键包含了许多值的一份表，以及每一个新的\verb|"|Category\verb|"|键都只包含一个原始种类的另一份列表。
+\begin{verbatim}
+("Desktop Entry"
+      ("Name" . "Emacs Text Editor")
+      ("Name[de]" . "Emacs Texteditor")
+      ("GenericName" . "Text Editor")
+      ("Comment" . "Edit text")
+      ("Exec" . "emacs %f")
+      ("Icon" . "emacs-icon")
+      ("Type" . "Application")
+      ("Terminal" . "false")
+      ("Categories" . "Development;TextEditor;")
+      ("Cateogry" . "Development") ; Look here
+      ("StartupWMClass" . "Emacs"))
+
+("Desktop Entry"
+      ("Name" . "Emacs Text Editor")
+      ("Name[de]" . "Emacs Texteditor")
+      ("GenericName" . "Text Editor")
+      ("Comment" . "Edit text")
+      ("Exec" . "emacs %f")
+      ("Icon" . "emacs-icon")
+      ("Type" . "Application")
+      ("Terminal" . "false")
+      ("Categories" . "Development;TextEditor;")
+      ("Cateogry" . "TextEditor") ; Look here
+      ("StartupWMClass" . "Emacs"))
+\end{verbatim}
+这是用于之后所有过滤器的条目表的格式。所有过滤器函数都应该接受这么一个列表作为它的参数，并且所有过滤器函数要么返回nil，要么返回一个条目列表。如果`fdo-associate-categories'为`t'那么在最终显示在`apps-menu'中时\verb|"|Category\verb|"|键会被修改为主种类。现在被应用程序菜单使用的键是，
+\begin{description}
+\item[*] \verb|Name([])|\\
+在应用程序菜单中显示的名字。如果`apps-menu-lang'或者区域设置符合条目列表的Name[lang]键中的一个，那么那将是所使用的名字。
+\item[*] \verb|Exec|\\
+条目被调用时运行的命令。
+\item[*] \verb|Terminal|\\
+是否在一个终端当中来运行`Exec'的值。如果这为真，那么由`xterm-program'指定的终端将被使用。
+\item[*] \verb|Category|\\
+条目放置在哪一个顶级的范畴中。
+\item[*] \verb|Hidden|\\
+默认情况下是否隐藏条目。
+\item[*] \verb|NoDisplay|\\
+默认情况下是否显示条目。
+\item[*] \verb|NotShowIn|\\
+将当前桌面环境和这个键的值对比决定是否不显示条目。
+\item[*] \verb|OnlyShowIn|\\
+将当前桌面环境和这个键的值对比决定是否显示条目。
+\end{description}
+\subsubsection{过滤器}
+过滤器就是函数，而不管是预定义的还是用户定义的，接收一个桌面文件条目作为参数。你可以设置`apps-menu-filter'变量为你的过滤器。
+
+这里我们展示一个用户定义的过滤器的例子，而所有预定义的过滤器，也可以用在用户代码上。
+\begin{verbatim}
+;; This will move emacs to the ``util'' category, in addition to the
+;; operations done by default filter.
+(setq apps-menu-filter
+      (lambda (ent)
+   (let ((ent (fdo-default-filter ent)))
+     (when ent
+     	(cond ((string-match "[Ee]macs" (cdr (assoc "Name" ent)) nil t)
+     	       (rplacd (assoc "Category" ent) "util")))
+     	ent))))
+\end{verbatim}
+预定义过滤器：
+\begin{verbatim}
+(define (fdo-nodisplay-filter fdol)
+  "Return the desktop-file-list if NoDisplay is False, or if NoDisplay is
+not present in the desktop-file-list"
+  (if (assoc "NoDisplay" fdol)
+      ;; [Ff] means match to "false"
+      (if (string-match "[Ff]" (cdr (assoc "NoDisplay" fdol)))
+             fdol)
+    fdol))
+
+(define (fdo-hidden-filter fdol)
+  "Return the desktop-file-list if Hidden is False, or if Hidden is
+not present in the desktop-file-list"
+  (if (assoc "Hidden" fdol)
+      (if (string-match "[Ff]" (string-downcase (cdr (assoc "OnlyShowIn" fdol))))
+     fdol)
+    fdol))
+
+(define (fdo-onlyshowin-filter fdol)
+  "Return the desktop-file-list if OnlyShowIn matches `desktop-environment', or if OnlyShowIn is not present in the desktop-file-list"
+  (if (assoc "OnlyShowIn" fdol)
+      (if (string-match desktop-environment (string-downcase (cdr (assoc "OnlyShowIn" fdol))))
+     	 fdol)
+      fdol))
+
+(define (fdo-notshowin-filter fdol)
+  "Return the desktop-file-list if NotShowIn does not match `desktop-environment', or if NotShowIn is not present in the desktop-file-list"
+  (if (assoc "NotShowIn" fdol)
+      (if (not (string-match desktop-environment (string-downcase (cdr (assoc "NotShowIn" fdol)))))
+         fdol)
+     fdol))
+
+(define (fdo-associate-categories-filter fdol)
+  "If `apps-menu-associate-categories' is true, filter the desktop-entry through `fdo-associate-categories'."
+  (when fdol
+    (if apps-menu-associate-categories
+        (associate-categories fdol)
+       fdol)))
+
+(define (fdo-toplevel-filter fdol)
+  "Return the desktop-file-list if the `Category' is of the Top-Level variety."
+  (when fdol
+    (if (not (equal "Top-Level" (cdr (assoc "Category" fdol))))
+       fdol)))
+
+(define (fdo-default-filter fdol)
+  "The default fdo-filter, combines the above."
+  (fdo-toplevel-filter
+   (fdo-hidden-filter
+    (fdo-notshowin-filter
+     (fdo-onlyshowin-filter
+      (fdo-nodisplay-filter fdol))))))
+
+(setq apps-menu-filter fdo-default-filter)
+\end{verbatim}
+\section{弹出式菜单定义}
+Sawfish带有现成的弹出式菜单。这一节讲述你怎么才能修改它们。
+
+一个完整的弹出式菜单是由一个列表指定的。每一个元素对应一个菜单项目，按照从顶到底的显示顺序。例如：
+\begin{verbatim}
+(("Item _1" command-1)   ;; list for a command.
+ ("Item _2" . submenu-2) ;; cons for a submenu.
+ ()                      ;; nil makes a seperator line
+ ("_xterm" (system "xterm &")) ;; lisp expression is possible too.
+\end{verbatim}
+
+通常每个菜单项目都由一个带两个元素的列表指定。第一个元素是名字；它是一个字符串，并且在菜单中显示。一个字符前面的下划线（\_）定义了一个加速器，或者说一个快捷键。
+
+第二个元素指定了采取的动作。可能的选项是：
+\begin{description}
+\item[命令] 如果它是一个命令的名字（一个符号），那么那个命令就被调用。在窗口操作菜单中，如果那个命令接收一个窗口作为参数，那么就传递一个窗口。
+\item[Lisp表达式] 如果是一个Lisp表达式，那么它将在`user'模块中被求值。
+\item[函数] 如果是一个函数（闭包或者子例程），那么将不带参数地调用。
+\end{description}
+如果一个项目为nil（而不是一个带两个元素的列表），那么将作为一个分隔线打印。
+
+一个项目可以引起一个子菜单。假若这样，这个项目是一个点对。car部分是打印的名字。cdr部分是一个变量名字的符号。这个变量指定了另一个菜单的内容。或者这个变量引用到一个函数，它被调用，并且使用它的返回值。
+
+传递一个项目多于两个元素的列表也是可能的，但没有进行解释。（阅读源代码并告诉我们用法。）
+
+让我们看更多的例子：
+\begin{verbatim}
+(("Workspaces" . workspace-menu)
+ ("Windows" . window-menu)
+ ("Programs" . apps-menu)
+ ("Customize" . custom-menu)
+ ("About..." (customize 'about))
+ () ; Separation horizontal bar.
+ ("Restart" restart)
+ ("Quit" quit))
+\end{verbatim}
+这是Sawfish的根菜单的老定义。我们可以看到有四个子菜单通过查看变量的值而被创建。他们包括函数，并且被调用。
+\begin{description}
+\item[-{}-] 函数：\verb|popup-menu spec|\\
+显示由项目定义SPEC列表定义的菜单。
+\item[-{}-] 变量：\verb|root-menu|\\
+包含根菜单的定义。
+\item[-{}-] 变量：\verb|window-ops-menu|\\
+包含所有窗口操作的定义的变量。
+\end{description}
+
+弹出式菜单是通过一个独立进程生成的。
+\begin{description}
+\item[-{}-] 变量：\verb|menu-program|\\
+实现Sawfish的菜单界面的程序的位置。
+\end{description}
+
+向开发人员说明一件更难懂的事情，``toggle menu''被解释了。
+\begin{description}
+\item[-{}-] 变量：\verb|window-ops-toggle-menu|\\
+窗口操作的开关类型的子菜单，像``sticky''和``shaded''。通过在这个菜单中选择项目，用户可以为一个给定的窗口打开或关闭标记。
+\item[-{}-] 函数：\verb|add-window-menu-toggle label command #!optional predicate|\\
+往`window-ops-toggle-menu'中加入一个项目。COMMAND是在菜单项目被选择时被运行的函数（或者一个指向函数的符号）。
+
+如果PREDICATE不为nil，它必定是一个接受一个窗口作为参数的函数。如果PREDICATE返回真，那么菜单项目会在它旁边有一个勾号。
+\end{description}
+\chapter{事件}
+\chapter{命令}
+粗略地说，一个``命令''是可以从键盘或者鼠标输入调用的lisp函数。但更趋向于传递当前聚焦的窗口作为参数，并且这机制已经准备好了。因此Sawfish区别对待这两个概念。
+
+正式地讲，一个命令是一个名字到一个函数的关联，以及一个传递参数的方式等等。
+
+命令的名字和绑定（包括函数）属于两个名字空间。
+\begin{description}
+\item[-{}-] 变量：\verb|customize-command-classes|\\
+在配置器的``binding''一节，展示了这些类的命令。它是一个列表，可取的键为`default'、`advanced'、`viewport'和`deprecated'。
+\end{description}
+\section{命令定义}
+\begin{description}
+\item[-{}-] 函数：\verb|define-command name fun #!key spec type doc class|\\
+定义一个叫做NAME（一个符号）的命令。函数FUN被调用以执行这条命令。
+
+SPEC定义了交互式调用命令时如何传递参数。参见交互式调用规格。
+
+DOC是和这条命令关联的文档字符串。如果没有，那么就查找函数FUNC的文档字符串。
+
+其它参数大部分用于内部。
+
+TYPE也指定参数。这些参数静态地设置在配置器的``Bindings''一节中。如果TYPE被设置了，那么和命令名字已经被绑定的一般案例相比，形如`(command-name arg1 arg2)'这样的lisp表达式就绑定到键上。（缺乏准确的文档）
+
+CLASS是一个注解命令的符号，例如`advanced'。用户通过CLASS可以选择那个命令将被显示在配置器中。参见`customize-command-classes'的文档。（参见命令）
+\item[-{}-] 函数：\verb|define-command-to-screen name fun #!key spec type doc class|\\
+和`define-command'一样，但任何FUN的输出都将发送到屏幕，就是说，`standard-output'被重定向了。
+\item[-{}-] 函数：\verb|autoload-command name module #!key spec type doc class|\\
+记住加载模块MODULE（一个符号）时会提供名为NAME的命令。
+
+关键字值和用于`define-command'的有一样的含义。定义那些属性作为自动加载的一部分可以提供有用的回馈给用户而不需要加载。
+\end{description}
+\section{旧式的命令定义}
+不赞成使用GNU Emacs风格的命令定义，它属于旧式语法，但仍然得到支持。命令定义被包括在函数定义当中。函数体中的第一个表达式必须为``交互式声明''以标记这个函数可能会被交互式地调用并告诉`call-command'函数如何计算应用在这道命令上的参数值。
+
+交互式声明看起来像一个对特殊表达式`interactive'的调用，而实际上这个特殊表达式总是返回`nil'并且没有副作用。这个表达式的唯一影响是向`call-command'函数展示这个函数定义可能会被交互式地调用。声明表达式的第二个元素（在`interactive'符号之后）定义了应用到命令上的参数值如何计算。
+
+交互式声明的结构，是
+\begin{verbatim}
+(interactive [CALLING-SPEC])
+\end{verbatim}
+这里展示了一条命令被定义时如何包含交互式声明：
+\begin{verbatim}
+(defun some-command (arg1)
+  "Optional documentation string."
+  (interactive ...)
+  ...
+\end{verbatim}
+CALLING-SPEC定义在交互式调用规格中。
+\section{交互式调用规格}
+`interactive'或者`define-command'中的SPEC参数定义了当命令被交互式调用时应用到命令上的参数。它应该是下列之一：
+\begin{description}
+\item[`nil'或者未定义] 没有任何参数传递给命令。
+\item[一个字符串] 它包含零个或者多个行（每一个由一个新行符分隔）。每一个行定义了如何计算一个参数的值。每一行的第一二个字符是一个精确定义如何计算参数的前缀，这一行的剩下部分是一个一些前缀可能使用到的可选参数。参见下面前缀的列表。一个空行产生一个值为`nil'的参数。
+\item[其它任何东西] 这个表达式被求值并且期望其返回一个参数列表来应用到命令上。
+\end{description}
+
+当前可用的前缀是，
+\begin{description}
+\item[e] 导致命令被调用的事件。
+\item[E] 导致命令的事件，被包装在字符串中。
+\item[p] 前缀参数作为一个数字，如果没有输入前缀参数就会是1。
+\item[P] 原始的前缀参数。
+\item[t] 符号`t'。
+\item[\%f] 当前拥有输入焦点的窗口，如果没有窗口有焦点就返回`nil'。
+\item[\%w] 调用`current-event-window'函数的结果。
+\item[\%W] 调用`current-event-window'函数的结果，如果返回`nil'或者`root'，那么就是当前聚焦的窗口。
+\end{description}
+\section{对命令的操作}
+我们可以提取和命令有关的特定信息。
+\begin{description}
+\item[-{}-] 函数：\verb|commandp SYMBOL|\\
+如果SYMBOL是一个命令名就返回`t'。
+\item[-{}-] 函数：\verb|command-documentation name|\\
+返回命令NAME的文档。它返回这样查找得到的第一个文档（按顺序）；命令的文档属性；和文档键属性关联的文档文件；或者同名函数的文档。
+\item[-{}-] 函数：\verb|command-spec name|
+\item[-{}-] 函数：\verb|command-type name|
+\item[-{}-] 函数：\verb|command-class name|\\
+返回命名命令的规格、类型或者类（各自地）。
+\item[-{}-] 函数：\verb|report-commands #!optional type all|\\
+返回命令的一份列表。每一个元素都是一个命令名字的符号，并且它们按照字母顺序排列。
+
+可选参数TYPE用于内部。当它不为nil时，为带有``type''的命令返回`(command-name \#:type type-param)'，而不是一个符号。
+
+如果可选参数ALL是nil，只返回用户要的命令，就是说，包括那些被`customize-command-class'指定的。其它情况，返回所有命令。
+\end{description}
+\section{调用命令}
+
+\chapter{键映射}
+键映射用于将事件和命令关联。当发生一个事件时，就查找与之关联的命令并执行它。键映射就是一个第一个元素为符号`keymap'的列表。
+\begin{description}
+\item[-{}-] 函数：\verb|keymap arg|\\
+当ARG可能作为键映射使用时返回`t'。
+\item[-{}-] 函数：\verb|make-keymap|\\
+返回一个新建的空键映射。
+\item[-{}-] 函数：\verb|bind-keys keymap &rest bindings|\\
+向键映射KEYMAP中安装零个或多个键绑定，然后返回KEYMAP。
+
+每一个绑定都是由BINDINGS的列表中的两个元素定义的，第一个定义了一个事件的名称（或者事件本身）而第二个定义了与之关联的命令。
+
+例如要将两个键与键映射KEYMAP绑定；下面的表达式使用绑定到命令`foo'的事件`C-f'和绑定到命令`bar'的事件`C-b'，
+\begin{verbatim}
+(bind-keys KEYMAP
+ "C-f" 'foo
+ "C-b" 'bar)
+\end{verbatim}
+现在，不能够将多个按键绑定到一个单独的`bind-keys'调用上。相反，将一个事件绑定到另一个键映射上。
+\item[-{}-] 函数：\verb|unbind-keys KEYMAP &rest KEYS|\\
+从键映射KEYMAP中移除到事件KEYS（这可能是一个事件的名字或者事件对象本身）的绑定。
+\end{description}
+
+函数`bind-keys'和`unbind-keys'并不影响现有的窗口的绑定，因为键映射是在窗口被创建并且被Sawfish接管时设置的。可以利用下面的函数来更新。
+\begin{description}
+\item[-{}-] 函数：\verb|grab-keymap keymap|
+\item[-{}-] 函数：\verb|upgrab-keymap keymap|\\
+所有存储在KEYMAP中的绑定对所有窗口产生/不产生效果，包括根窗口，但不包括框架部件。
+
+注意`ungrab-keymap'必须在你改变键映射之前调用。
+
+如果出了`window-keymap'之外，窗口foo还有自己的键映射，那么它不会受`(grab-keymap window-keymap)'影响。
+\item[-{}-] 函数：\verb|search-keymap event keymap|\\
+在KEYMAP中搜索事件EVENT的一个绑定。如果找到绑定了就返回一个`(COMMAND . EVENT)'点对。
+\end{description}
+
+有许多预定义的总是可用的键映射：
+\begin{description}
+\item[`global-keymap'] 包含在任何地方都活跃的绑定的键映射。
+\item[`window-keymap'] 包含窗口被聚焦时才激活的绑定的键映射。
+\item[`root-window-keymap'] 包含当指针在根窗口时才激活的绑定的键映射。
+\item[`title-keymap'] 
+\item[`border-keymap'] 在窗口框架的标题栏和边框激活的键映射。
+\item[`close-button-keymap']
+\item[`iconify-button-keymap']
+\item[`maximize-button-keymap']
+\item[`menu-button-keymap']
+\item[`shade-button-keymap']
+\item[`sticky-button-keymap']
+\item[`lock-button-keymap']
+\item[`rename-button-keymap']
+\item[`move-resize-button-keymap']
+\item[`raise-lower-button-keymap'] 在标准的窗口框架按钮上激活的键映射。
+\item[`override-keymap'] 必须是键映射、符号或者`nil'中的一个。如果是一个键映射，它将变成所有查找发生时的键映射（覆盖窗口、根窗口和全局键映射）。如果是一个符号，Sawfish就查找这个符号的值并再调用一次。如果是`nil'，Sawfish就正常地工作。
+\end{description}
+\chapter{多方面的函数}
+\section{指针函数}
+\begin{description}
+\item[-{}-] 函数：\verb|query-pointer #!optional from-server|\\
+返回一个表示当前鼠标指针位置的点对`(x . y)'，相对于根窗口的起始位置。
+
+如果有一个鼠标升级当前事件，位置就直接从这个事件读取。否则从服务器读取。如果FROM-SERVER不为nil那么无论如何位置都从服务器直接读取。
+\item[-{}-] 函数：\verb|query-pointer-window|\\
+返回位于鼠标指针之下的最顶层的窗口，如果光标在根窗口中就返回`nil'。
+\item[-{}-] 函数：\verb|query-last-pointer|\\
+返回一个表示最近第二次的鼠标指针相对于根窗口位置的点对`(X . Y)'。
+\item[-{}-] 函数：\verb|query-button-press-pointer|\\
+返回最后一次按钮事件时鼠标位置相对于根窗口的位置`(MOUSE-X . MOUSE-Y)'。
+
+使用这个函数来跟踪指针在拖曳过程中的位置。
+\item[-{}-] 函数：\verb|query-button-press-window|\\
+返回按钮被按下时鼠标所在的窗口。
+\item[-{}-] 函数：\verb|warp-cursor x y|\\
+移动鼠标指针到相对于根窗口为(X, Y)的位置。
+\item[-{}-] 函数：\verb|warp-cursor-to-window window #!optional x y|\\
+移动鼠标指针到相对于窗口WINDOW的(X, Y)的位置。
+
+如果X和Y是`nil'，那么它们被设定为窗口框架的左上角。
+
+如果`warp-to-window-enabled'是`nil'，那么函数不做任何事情。
+\item[-{}-] 变量：\verb|warp-to-window-offset|\\
+当翘曲指针时从窗口边缘的偏移（\%）。负数表示在窗口的左边缘之外。
+\item[-{}-] 变量：\verb|warp-to-window-enabled|\\
+当为假时，不启用光标翘曲到窗口的功能。
+\item[-{}-] 变量：\verb|pointer-motion-threshold|\\
+
+\end{description}
+\section{抓取函数}
+\chapter{外部应用程序}
+在这一章中将讲述和外部程序的关系。参见应用程序菜单，那是一个执行应用程序的弹出式菜单。
+\section{应用程序调用}
+同时参考从shell开启一条命令的lisp函数`system'。（参见Shell命令（librep）。）
+\begin{description}
+\item[-{}-] 函数：\verb|jump-or-exec regex prog #!key match-class onfocused|\\
+跳转到一个窗口，或者如果它不存在，开启一个程序。这个函数的主要应用是作为一个键的绑定。它在`sawfish.wm.commands.jump-or-exec'模块中定义。
+
+窗口通过将名字与正则表达式REGEX匹配来进行查找。如果布尔值MATCH\_CLASS不为nil，那么REGEX的值就和窗口的WM\_CLASS进行匹配。如果没有窗口与之匹配，那么由PROG指定的动作就会被执行。
+
+如果PROG是一个字符串，那么它应该是一个应用程序的名字，并且在一个shell当中后台运行。（就是说，Sawfish添加``\&''。）否则，它应该是一个函数、命令的名字或者lisp表达式。这个函数不带任何参数被调用。lisp表达式会在`user'模块中被求值。
+
+如果可选参数ONFOCUSED不为nil，那么它定义了当窗口已经聚焦时采取的动作，和PROG以一样的方式运行，但这个函数会接收这个聚焦中的窗口作为参数。这个不能是一个字符串。
+\begin{verbatim}
+;; Examples:
+
+;; Jump to a window named "Geany". When not found, invoke "geany"
+;; from a shell.
+(bind-keys global-keymap "W-F10"
+  '(jump-or-exec "Geany" "geany"))
+
+;; Jump to a window with the class "Gnome-run-dialog".
+(bind-keys global-keymap "W-F2"
+  '(jump-or-exec "Gnome-run-dialog" "/usr/local/bin/gnome-run-dialog" #:match-class t ))
+\end{verbatim}
+\item[-{}-] 函数：\verb|toggle-or-exec regex prog #!key match-class|\\
+这个函数比`jump-or-exec'多了一个窗口``抖动''的功能------像``toggle-windows''一样。这意味着，如果这个函数在一个匹配的窗口上调用，那个窗口就会被图标化。其它情况就和`jump-or-exec'一样工作。
+
+你可能还想使用一个窗口属性`iconify-on-leave'。（参见图标化窗口。）
+\begin{verbatim}
+;; Examples:
+
+;; Application "dolphin", matched by its name (i.e. WM_NAME.)
+;; Press "Home" key, and
+;; * if no instance of dolphin is running, it's invoked.
+;; * if one is there, the focus jumps to it.
+;; * if it's already focused, it will be iconified.
+;;
+;;  ( bind-keys global-keymap "Home"
+;;    `( toggle-or-exec "Dolphin" "dolphin ~" )
+
+;; "konsole", matched by its window-class (= WM_CLASS).
+;;  ( bind-keys global-keymap "F12"
+;;    `( toggle-or-exec "Konsole" "konsole" #:match-class t )
+\end{verbatim}
+\end{description}
+\section{公共应用程序}
+这里有一些用于调用外部应用程序的函数和变量。它们定义在`sawfish.wm.commands.launcher'模块中。
+\begin{description}
+\item[-{}-] 可定制：\verb|xterm-program|\\
+由`xterm'函数来启动的程序。由shell解释。
+\item[-{}-] 函数：\verb|xterm #!optional command|
+\item[-{}-] 命令：\verb|xterm|\\
+开始一个新的由`xterm-program'指定的终端。
+
+可选参数COMMAND传递给带选项`-e'的终端，因此对于大多数的终端，包括xterm，它可以包括要传递的参数。
+\item[-{}-] 可定制：\verb|browser-program|\\
+由`browser'函数来启动的程序。由shell解释。
+\item[-{}-] 函数：\verb|browser #!optional url|
+\item[-{}-] 命令：\verb|browser|\\
+打开一个新的浏览器实例。如果有URL就访问它。
+\end{description}
+
+Sawfish会测试一些桌面环境。
+\begin{description}
+\item[-{}-] 变量：\verb|desktop-environments|\\
+由Sawfish测试得出的运行中的桌面环境。可能的值为\verb|"|kde\verb|"|、\verb|"|gnome\verb|"|、\verb|"|xfce\verb|"|或者\verb|"|none\verb|"|。
+\end{description}
+\chapter{标准挂钩}
+\end{CJK*}
+\end{document}

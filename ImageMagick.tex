@@ -1,0 +1,105 @@
+\documentclass{article}
+\usepackage{CJK}
+\usepackage{amsmath}
+\usepackage{longtable}
+\setlength{\parindent}{2em}
+\linespread{1.2}
+\begin{document}
+\begin{CJK*}{UTF8}{gbsn}
+\tableofcontents{}
+\section{ImageMagick}
+\subsection{名称}
+ImageMagick - 是一个用于创建、修改和显示位图的自由软件套件。
+\subsection{摘要}
+\verb|convert input-file [options] output-file|
+\subsection{概观}
+ImageMagick$^{\text{\textregistered{}}}$，是一个用于创建、编辑和合成位图的软件套件。它可以读取、转换和生成各种格式的图像，包括GIF、JPEG、JPEG-2000、PNG、PDF、PhotoCD、TIFF和DPX。利用ImageMagick可以移动、翻转、反射、旋转、拉伸、裁剪和变换图像，调整图像颜色，应用各种特效，或者绘制文字、线、多边形、椭圆和贝塞尔曲线。
+
+ImageMagick作为一个自由软件，以可以马上使用的二进制发行版或者你可以自由使用、复制、修改和发行的源代码的形式发布。它的许可证和GPL兼容。它能在所有主流操作系统上运行。
+
+ImageMagick的功能一般由命令行使用或者你可以从自己最喜欢的编程语言中利用这些特性。从这些接口中选择：MagickCore（C）、MagickWand（C）、ChMagick（Ch）、Magick++（C++），JMagick（Java）、L-magick（Lisp）、PascalMagick（Pascal）、PerlMagick（Perl）、MagickWand for PHP（PHP）、PythonMagick（Python）、RMagick（Ruby）或者TclMagick（Tcl/TK）。通过一个语言接口，可以利用ImageMagick自动而动态地修改和创建图像。
+
+ImageMagick包含很多命令行工具以处理图像。大多数是你习惯于在一个图形用户界面（GUI）如gimp或者Photoshop中用于编辑图像的。但是，一个GUI并不总是方便的。假设你想要在一个网络脚本中动态地处理一个图像，或者想要将同样的操作应用到很多图像上，或者在不同的时间对相同活不同的图像重复指定操作。对于这类型的操作，命令行的图像处理工具是更适合的。
+
+在下面的段落中，找到每一个命令行工具的简短描述。在程序的名字上点击以获得程序用法的的细节和一份关于如何改变程序行为的命令行选项。如果你刚刚接触ImageMagick，那么从这份列表的顶部，convert程序开始，并且以自己的方式工作。同时记得熟读Anthony Thyssen关于如何使用ImageMagick工具来从命令行转换、合成或者编辑图像的教程。
+\begin{description}
+\item[convert] 转换图像格式，也可以调整图像大小、模糊化、修剪、去斑、抖动、动用、翻转、重新取样以及更多。
+\item[identify] 描述一幅或者多幅图像的格式和特征。
+\item[mogrify] 调整一幅图像的大小、模糊化、修剪、去斑、抖动、动用、翻转、连接、重新取样以及更多操作。Mogrify会覆盖原始的图像文件，而convert则写入一个不同的图像文件。
+\item[composite] 将一幅图像覆盖在另一幅上面。
+\item[montage] 通过将许多幅图像包含在一起创建混合图像。图像会伴随着可选的边框、框架、图像名称和更多东西一起平铺在混合图像中。
+\item[compare] 数学地和可视化地注解一幅图像和它的重建之间的不同。
+\item[stream] 是一个轻量级的用于将一个或多个图像或者图像的部分上的像素部件流向你所选择的存储格式的工具。它一次从输入图像中读取一行并将这些像素写入，使得当应用于大型图像或者要求纯粹的像素成份时可以使用。
+\item[display] 在任意X服务器上显示图像或者图像序列。
+\item[animate] 在任意X服务器上演示图像序列的动画。
+\item[import] 将所有在一个X服务器上的可见窗口保存下来并输出为一个图像文件。你可以捕捉一个单一的窗口、整个屏幕、或者任何屏幕上的矩形部分。
+\item[conjure] 解释并执行以Magick脚本语言（MSL）编写的脚本。
+\end{description}
+关于ImageMagick的更多信息，请用你的浏览器定位到file:///usr/share/doc/imagemagick/index.html或者http://www.imagemagick.org/进行查看。
+\section{convert}
+\subsection{名称}
+convert - 转换图像格式，也可以调整图像大小、模糊化、修剪、去斑、抖动、动用、翻转、重新取样以及更多。
+\subsection{摘要}
+\verb|convert [input-options] input-file [output-options] output-file|
+\subsection{概观}
+\textbf{convert}程序是ImageMagick（1）工具套件中的一员。使用它来转换图像格式，也可以调整图像大小、模糊化、修剪、去斑、抖动、动用、翻转、重新取样以及更多。
+
+关于convert命令的更多信息，请用你的浏览器定位到file:///usr/share/doc/imagemagick/www/convert.html或者http://www.imagemagick.org/script/convert.php进行查看。
+\subsection{描述}
+图像设定：
+\begin{flushleft}
+\begin{longtable}{@{-}ll}
+adjoin&将图像加入一个单一的多图像文件\\
+affine matrix&仿射的变换矩阵\\
+antialias&移除像素别名\\
+authenticate value&用这个密码对图像加密\\
+background color&背景色\\
+bias value&盘旋一幅图像时添加斜纹\\
+black-point-compensation&使用黑点补偿\\
+blue-primary point&蓝色度的初始点\\
+bordercolor color&边框颜色\\
+caption string&给一幅图像分配说明文字\\
+cdl filename&通过一个颜色决定表进行颜色校正\\
+channel type&应用选项来选择图像频道\\
+colors value&图像中的颜色的偏好数\\
+colorspace type&供替代的图像颜色空间\\
+comment string&用注释注解图像\\
+compose operator&设置图像的混合操作\\
+compress type&当写图像时使用的像素压缩类型\\
+decipher filename&将密码像素转换为单纯的像素\\
+define format:option&定义一个或多个图像格式选项\\
+delay value&在暂停之后再显示下一张图像\\
+density geometry&图像的水平方向和垂直方向的密度\\
+depth value&图像深度\\
+display server&从X服务器获取图像或者字型\\
+dispose method&图层处理方法\\
+dither method&将错误扩散在图像中\\
+encipher filename&转换单纯的像素为密码像素\\
+encoding type&文本编码类型\\
+endian type&图像的字节序（MSB或者LSB）\\
+family name&使用这种字族来渲染文本\\
+fill color&当填充一个图形原语时使用的颜色\\
+filter type&当调整一幅图像大小时使用的过滤器\\
+flatten&展开一序列的图像\\
+font name&以这种字体渲染文字\\
+format \verb|"|string\verb|"|&输出格式化的图像特征\\
+fuzz distance&在这个距离内的颜色被认为是相等的\\
+gravity type&水平方向和垂直方向的文字位置\\
+green-primary point&绿色度的初始点\\
+intent type&当管理图像颜色时渲染意图的类型\\
+interlace type&图像交织方案的类型\\
+interpolate method&像素颜色插入方法\\
+label string&给一幅图像分配一个标签\\
+limit type value&像素缓存资源的极限值\\
+loop iterations&添加Netscape的循环扩展到你的GIF动画中\\
+mask filename&将一个掩码与图像进行关联\\
+matte&如果图像有一个质感管道就保存起来\\
+mattecolor color&框架颜色\\
+monitor&监视进展\\
+orient type&图像方向\\
+origin geometry&图像起源\\
+\end{longtable}
+\end{flushleft}
+\section{}
+\end{CJK*}
+\end{document}
